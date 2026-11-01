@@ -333,11 +333,15 @@
   }
   if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   adjustViewport();boot();
-  if(directory) setInterval(async()=>{
+  setInterval(async()=>{
     try {
       const changed=await refreshEndpoint(false);
       if(state.user && changed) poll();
       else if(!state.user && sessionToken) boot();
-    } catch(_error) {}
+      else if(!state.user) {
+        await api('health');connection(true);
+        if($('join-error').textContent.startsWith('Телефон пока недоступен.')) $('join-error').textContent='';
+      }
+    } catch(_error) {if(!state.user) connection(false);}
   },15000);
 })();
