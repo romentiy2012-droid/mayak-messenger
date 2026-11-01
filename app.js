@@ -1,11 +1,15 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const configuredAPI = (window.MAYAK_CONFIG || {}).apiBaseURL || '';
-  const apiURL = configuredAPI ? new URL(configuredAPI) : new URL(location.origin);
+  const config = window.MAYAK_CONFIG || {};
+  const configuredAPI = config.apiBaseURL || '';
+  let apiURL = configuredAPI ? new URL(configuredAPI) : new URL(location.origin);
   if(configuredAPI && (apiURL.protocol !== 'https:' || apiURL.username || apiURL.password || apiURL.search || apiURL.hash || apiURL.pathname !== '/')) throw new Error('Неверный адрес сервера Маяка.');
   const remote = apiURL.origin !== location.origin;
-  const storageKey = 'mayak.session:' + location.pathname + ':' + apiURL.origin;
+  let safeStorage;
+  try {safeStorage = localStorage;} catch(_error) {safeStorage = {getItem:()=>null,setItem:()=>{}};}
+  const directory = config.endpointDirectory ? window.MayakEndpoint.create(config, {fetch:window.fetch.bind(window), storage:safeStorage, baseURL:location.href}) : null;
+  const storageKey = 'mayak.session:' + location.pathname + ':' + (config.serverId || apiURL.origin);
   let sessionToken = '';
   try {if(remote) sessionToken=localStorage.getItem(storageKey)||'';} catch(_error) {}
   function rememberToken(token) {
@@ -13,7 +17,8 @@
     if(remote) {try {if(token) localStorage.setItem(storageKey,token);else localStorage.removeItem(storageKey);} catch(_error) {if(token) toast('Вход сохранён до закрытия приложения. Браузер запретил постоянное хранение.');}}
   }
   const state = {user:null, csrf:'', messages:[], people:[], last:0, older:false, online:false,
-    polling:false, pollCount:0, sending:false, inviteURL:'', install:null, draft:null};
+    polling:false, pollCount:0, sending:false, inviteURL:'', install:null, draft:null,
+    streamController:null, lastChunk:0, retryDelay:1000};
   let invitation = new URLSearchParams(location.hash.slice(1)).get('invite') || '';
   let timer = null, toastTimer = null, previousFocus = null;
 
@@ -35,22 +40,37 @@
     $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {$('toast').hidden = true;}, 3500);
   }
-  async function api(path, options = {}) {
+  async function refreshEndpoint(force=false) {
+    if(!directory) return false;
+    const changed = await directory.refresh(force);
+    apiURL = new URL(directory.origin);
+    if(changed && state.streamController) state.streamController.abort();
+    return changed;
+  }
+  async function api(path, options = {}, retry=true) {
+    try {await refreshEndpoint(false);} catch(_error) {if(directory) apiURL = new URL(directory.origin);}
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
     try {
       const headers = Object.assign({}, options.body ? {'Content-Type':'application/json','X-Mayak-CSRF':state.csrf} : {}, options.headers || {});
       if(remote) {
-        headers.skip_zrok_interstitial='1';
+        if(/\.ngrok-free\.(app|dev)$/.test(apiURL.hostname)) headers['ngrok-skip-browser-warning']='1';
+        if(apiURL.hostname.endsWith('.zrok.io')) headers.skip_zrok_interstitial='1';
         if(sessionToken) headers.Authorization='Bearer '+sessionToken;
       }
       const response = await fetch(apiURL.origin + '/api/' + path, Object.assign({cache:'no-store'}, options, {credentials:remote?'omit':'same-origin',headers, signal:controller ? controller.signal : undefined}));
+      if(options.stream && response.ok) return {response,controller};
       let value;
       try {value=await response.json();} catch(_error) {throw new Error('Сервер пока недоступен. Попробуйте ещё раз чуть позже.');}
       if(!response.ok) {
         const error = new Error(value.error || 'Не удалось выполнить запрос.'); error.status = response.status; throw error;
       }
       return value;
+    } catch(error) {
+      if(directory && retry && (!error.status || error.status>=500)) {
+        try {if(await refreshEndpoint(true)) return api(path,options,false);} catch(_error) {}
+      }
+      throw error;
     } finally {if(timeout) clearTimeout(timeout);}
   }
   function connection(online) {
@@ -78,6 +98,7 @@
     adjustViewport();
   }
   function showJoin() {
+    if(state.streamController) state.streamController.abort();
     clearTimeout(timer);
     state.messages=[];state.people=[];state.last=0;state.older=false;state.inviteURL='';state.csrf='';
     $('messages').replaceChildren();$('people-list').replaceChildren();
@@ -151,20 +172,45 @@
   async function poll(initial=false) {
     if(!state.user || state.polling) return;
     state.polling=true;
+    let reader=null, watchdog=null;
     try {
-      const suffix = initial || !state.last ? '' : '?after='+state.last;
-      const result=await api('messages'+suffix);
-      if(initial || !state.last) state.older=result.has_older;
-      mergeMessages(result.messages, initial?'initial':'new');connection(true);
-      if(initial || state.pollCount++ % 4===0) {
-        const result=await api('people');state.people=result.people;renderPeople();
+      const stream=await api('events?after='+state.last,{stream:true});
+      state.streamController=stream.controller;
+      if(!stream.response.body) throw new Error('Браузер не поддерживает живую связь. Откройте чат в Chrome или Safari.');
+      reader=stream.response.body.getReader();
+      const decoder=new TextDecoder();let buffer='',first=true;
+      const armWatchdog=()=>{clearTimeout(watchdog);if(stream.controller) watchdog=setTimeout(()=>stream.controller.abort(),35000);};
+      armWatchdog();
+      while(state.user) {
+        const chunk=await reader.read();
+        if(chunk.done) break;
+        state.lastChunk=Date.now();state.retryDelay=1000;armWatchdog();
+        buffer+=decoder.decode(chunk.value,{stream:true});
+        if(buffer.length>1048576) throw new Error('Ответ сервера слишком большой.');
+        let boundary;
+        while((boundary=buffer.indexOf('\n\n'))>=0) {
+          const event=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
+          const data=event.split('\n').filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
+          if(!data) continue;
+          const result=JSON.parse(data);
+          if(result.signed_out){rememberToken('');showJoin();$('join-error').textContent='Войдите снова с прежним именем и паролем.';return;}
+          if(result.messages){
+            if(first && !state.last) state.older=result.has_older;
+            mergeMessages(result.messages,first && initial?'initial':'new');
+          }
+          if(result.people){state.people=result.people;renderPeople();}
+          first=false;connection(true);
+        }
       }
     } catch(error) {
       connection(false);
       if(error.status===401) {rememberToken('');showJoin();$('join-error').textContent='Войдите снова с прежним именем и паролем.';}
+      state.retryDelay=Math.min(state.retryDelay*2,30000);
     } finally {
-      state.polling=false;clearTimeout(timer);
-      if(state.user) timer=setTimeout(()=>poll(), document.hidden?10000:2000);
+      clearTimeout(watchdog);
+      if(reader) reader.cancel().catch(()=>{});
+      state.streamController=null;state.polling=false;clearTimeout(timer);
+      if(state.user) timer=setTimeout(()=>poll(),state.retryDelay);
     }
   }
   function dialog(title) {
@@ -274,12 +320,12 @@
   });
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();state.install=event;$('install-button').hidden=false;});
   window.addEventListener('appinstalled',()=>{$('install-button').hidden=true;toast('Маяк добавлен на главный экран');});
-  window.addEventListener('online',()=>{if(state.user)poll();else boot();});
+  window.addEventListener('online',()=>{if(state.user){if(state.streamController)state.streamController.abort();poll();}else boot();});
   window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1)).get('invite');if(next){invitation=next;if(!state.user)$('invite-field').hidden=true;}});
   window.addEventListener('offline',()=>connection(false));
   window.addEventListener('resize',adjustViewport);
   if(window.visualViewport)window.visualViewport.addEventListener('resize',adjustViewport);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user)poll();}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){if(state.streamController && Date.now()-state.lastChunk>12000)state.streamController.abort();poll();}}});
   async function boot() {
     $('invite-field').hidden=!!invitation;
     try {const session=await api('session');showChat(session);await poll(true);}
@@ -287,4 +333,11 @@
   }
   if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   adjustViewport();boot();
+  if(directory) setInterval(async()=>{
+    try {
+      const changed=await refreshEndpoint(false);
+      if(state.user && changed) poll();
+      else if(!state.user && sessionToken) boot();
+    } catch(_error) {}
+  },15000);
 })();
