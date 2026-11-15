@@ -6,6 +6,14 @@
   const pendingKey = 'mayak.cloud.pending:' + location.pathname;
   const storage = {get(){try{return JSON.parse(localStorage.getItem(pendingKey)||'null');}catch{return null;}},set(value){try{if(value)localStorage.setItem(pendingKey,JSON.stringify(value));else localStorage.removeItem(pendingKey);}catch{}}};
   function fail(message,status=400){return Object.assign(new Error(message),{status});}
+  function nameToEmail(raw) {
+    const clean = (raw || '').trim();
+    if(!clean) throw fail('Введите ваше имя.');
+    if(clean.includes('@')) return clean.toLowerCase();
+    const bytes = new TextEncoder().encode(clean.toLowerCase());
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return 'u_' + hex + '@mayak.app';
+  }
   function db() {
     if(client) return client;
     if(!config.supabaseURL || !config.supabasePublishableKey) throw fail('Облачный чат ещё настраивается. Владелец должен подключить Supabase.',503);
@@ -25,7 +33,7 @@
   function unwrap(result) {
     if(result.error){
       const e=result.error;
-      const messages={'Invalid login credentials':'Неверная почта или пароль.','Email not confirmed':'Подтвердите почту по письму Supabase.','User already registered':'Аккаунт уже существует. Выберите «Вход».','Email rate limit exceeded':'Лимит писем исчерпан. Попробуйте позже.'};
+      const messages={'Invalid login credentials':'Неверное имя или пароль.','Email not confirmed':'Владельцу нужно отключить подтверждение почты (Confirm email) в Supabase.','User already registered':'Такое имя уже зарегистрировано. Выберите «Вход».','Email rate limit exceeded':'Слишком много попыток. Попробуйте позже.'};
       throw fail(messages[e.message]||e.message,e.status||(['42501','PGRST301'].includes(e.code)?403:400));
     }
     return result.data;
@@ -59,12 +67,14 @@
     const [route,query='']=path.split('?');const params=new URLSearchParams(query);
     const body=options.body?JSON.parse(options.body):{};
     if(route==='join'){
-      const email=body.email.trim();const pending={invite:body.invite,name:body.name.trim()};
+      const name=(body.name||'').trim();
+      const email=nameToEmail(body.email||name);
+      const pending={invite:body.invite,name};
       if(body.register && (!pending.invite || !pending.name)) throw fail('Для регистрации нужны имя и приглашение.');
       if(pending.invite)storage.set(pending);
       if(body.register){
         const result=unwrap(await db().auth.signUp({email,password:body.password,options:{emailRedirectTo:location.origin+location.pathname}}));
-        if(!result.session)throw fail('Проверьте почту и подтвердите адрес. Затем выберите «Вход» и войдите с тем же паролем. Приглашение сохранено на этом устройстве.');
+        if(!result.session)throw fail('В настройках Supabase ещё включено подтверждение почты (Confirm email).');
       } else unwrap(await db().auth.signInWithPassword({email,password:body.password}));
       return session();
     }
