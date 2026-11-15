@@ -17,9 +17,11 @@
 
 Web Push: приложение подписывает устройство, триггер базы вызывает Edge Function `push`, она шлёт уведомление всем, кроме автора. Разовая настройка в Supabase:
 
-1. SQL Editor: выполнить `supabase/migrations/202611160002_push.sql`.
-2. Edge Functions → Deploy a new function → Via Editor: имя `push`, вставить `supabase/functions/push/index.ts`, развернуть. В настройках функции выключить «Verify JWT with legacy secret».
-3. Edge Functions → Secrets: добавить `VAPID_PRIVATE_KEY` (приватный ключ пары; в репозиторий не добавлять).
+1. Выполнить `supabase/migrations/202611160002_push.sql` (в ней адрес функции проекта — при смене проекта поправить).
+2. Развернуть Edge Function `push` из `supabase/functions/push/index.ts` с выключенной проверкой JWT («Verify JWT with legacy secret»).
+3. Приватный VAPID-ключ положить в Vault: `select vault.create_secret('<ключ>','mayak_vapid_private_key');` (или в секрет функции `VAPID_PRIVATE_KEY`). В репозиторий не добавлять.
+
+В проекте `jqmkjwsptxhovfxngqiy` всё это уже сделано.
 
 На устройстве: кнопка «Включить уведомления» в чате или в меню «⋯». iPhone — только из приложения, добавленного на экран Домой (iOS 16.4+). Android — Chrome/Яндекс/Firefox, лучше установленное приложение. Если чат открыт на экране, уведомление не показывается.
 

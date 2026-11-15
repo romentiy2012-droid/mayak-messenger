@@ -1,7 +1,8 @@
 // Edge Function `push`: рассылает Web Push о новом сообщении «Маяка».
 // Вызывается триггером базы с телом {"id": <номер сообщения>}. Проверка JWT для функции должна быть выключена:
 // защита — в mayak_push_claim (сообщение выдаётся один раз и только свежее).
-// Секрет функции: VAPID_PRIVATE_KEY. Без зависимостей — только WebCrypto.
+// Приватный VAPID-ключ: секрет функции VAPID_PRIVATE_KEY или Supabase Vault (mayak_vapid_private_key).
+// Без зависимостей — только WebCrypto.
 
 const VAPID_PUBLIC_KEY = 'BAC86tHcPhoq4UDXlrSMPGyKlP4sUC6ufrOArHxPGKWAagqwVwcuXX2PsQ_BsKnBkdGwSvF11wqcP31Jj0AOavM';
 const VAPID_SUBJECT = 'https://romentiy2012-droid.github.io/mayak-messenger/';
@@ -91,10 +92,10 @@ async function database(name, args) {
 }
 
 async function deliver(id) {
-  const privateKey = Deno.env.get('VAPID_PRIVATE_KEY');
-  if (!privateKey) throw new Error('Не задан секрет VAPID_PRIVATE_KEY.');
   const job = await database('mayak_push_claim', { p_id: id });
   if (!job) return { skipped: true };
+  const privateKey = Deno.env.get('VAPID_PRIVATE_KEY') || job.vapid;
+  if (!privateKey) throw new Error('Не задан приватный VAPID-ключ.');
   const payload = { id: job.id, title: job.title, body: job.body };
   const gone = [], failed = [];
   let sent = 0;

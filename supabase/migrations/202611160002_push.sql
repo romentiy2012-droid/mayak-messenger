@@ -44,12 +44,17 @@ grant execute on function public.mayak_push_subscribe(text,text,text),public.may
 -- Только для Edge Function (service_role). Сообщение выдаётся один раз и только свежее,
 -- поэтому повторный или посторонний вызов функции ничего не отправит.
 create function public.mayak_push_claim(p_id bigint) returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_msg public.mayak_messages;
+declare v_msg public.mayak_messages; v_key text;
 begin
  update public.mayak_messages set pushed=now()
   where id=p_id and pushed is null and created > now()-interval '5 minutes' returning * into v_msg;
  if not found then return null; end if;
- return jsonb_build_object('id',v_msg.id,'title',v_msg.name,'body',left(v_msg.text,200),
+ -- Приватный VAPID-ключ хранится в Supabase Vault (имя mayak_vapid_private_key), не в репозитории.
+ begin
+  select decrypted_secret into v_key from vault.decrypted_secrets where name='mayak_vapid_private_key';
+ exception when others then v_key := null;
+ end;
+ return jsonb_build_object('vapid',v_key,'id',v_msg.id,'title',v_msg.name,'body',left(v_msg.text,200),
   'subscriptions',coalesce((select jsonb_agg(jsonb_build_object('endpoint',s.endpoint,'p256dh',s.p256dh,'auth',s.auth))
    from mayak_private.push_subscriptions s where s.user_id<>v_msg.user_id),'[]'::jsonb));
 end;
@@ -65,7 +70,7 @@ create function mayak_private.push_notify() returns trigger language plpgsql sec
 begin
  begin
   perform net.http_post(
-   url := 'https://cfzzxkmctwrclhphqslr.supabase.co/functions/v1/push',
+   url := 'https://jqmkjwsptxhovfxngqiy.supabase.co/functions/v1/push',
    body := jsonb_build_object('id', new.id),
    headers := '{"Content-Type":"application/json"}'::jsonb);
  exception when others then null;
