@@ -265,7 +265,7 @@
       content.appendChild(toggle);
       pushActive().then(active=>{toggle.textContent=active?'Отключить уведомления':'Включить уведомления';}).catch(()=>{});
     } else content.appendChild(element('p','about-note',/iP(hone|ad|od)/.test(navigator.userAgent)?'Уведомления на iPhone: откройте чат в Safari, «Поделиться» → «На экран Домой», затем включите их в установленном приложении (нужна iOS 16.4 или новее).':'Этот браузер не поддерживает уведомления.'));
-    content.appendChild(element('p','about-note','История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. Meizu для работы не нужен. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
+    content.appendChild(element('p','about-note','История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
     content.appendChild(element('p','about-note','Маяк 2.1.0 · облачная версия.'));
     content.appendChild(button('Выйти на этом устройстве',async()=>{
       try {await pushDisable(true).catch(()=>{});await api('logout',{method:'POST',body:'{}'});closeDialog();$('message-input').value='';state.draft=null;showJoin();}
