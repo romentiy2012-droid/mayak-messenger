@@ -52,17 +52,19 @@
     storage.set(null);
     return {user:member,room:'Наш круг',csrf:''};
   }
+  const COLUMNS='id,user_id,name,text,nonce,created,reply_to,edited,deleted,reactions,rev';
+  // before — страница старых сообщений; rev — всё новое и изменённое после этой отметки; иначе — последние сообщения.
   async function messages(params) {
-    let q=db().from('mayak_messages').select('id,user_id,name,text,nonce,created');
-    const after=Number(params.get('after')||0),before=Number(params.get('before')||0);
-    if(before) q=q.lt('id',before);
-    else if(after) q=q.gt('id',after);
-    const ascending=!!after&&!before;
-    const rows=unwrap(await q.order('id',{ascending}).limit(101));
-    const extra=rows.length>100;const page=rows.slice(0,100);
-    if(!ascending)page.reverse();
-    return {messages:page,has_older:!ascending&&extra,has_more:ascending&&extra};
+    const q=db().from('mayak_messages').select(COLUMNS);
+    const before=Number(params.get('before')||0),rev=Number(params.get('rev')||0);
+    if(rev&&!before){
+      const rows=unwrap(await q.gt('rev',rev).order('rev',{ascending:true}).limit(101));
+      return {messages:rows.slice(0,100),has_older:false,has_more:rows.length>100};
+    }
+    const rows=unwrap(await (before?q.lt('id',before):q).order('id',{ascending:false}).limit(101));
+    return {messages:rows.slice(0,100).reverse(),has_older:rows.length>100,has_more:false};
   }
+  function person(row){return {...row,online:Date.now()-Date.parse(row.last_seen)<90000};}
   async function api(path,options={}) {
     const [route,query='']=path.split('?');const params=new URLSearchParams(query);
     const body=options.body?JSON.parse(options.body):{};
@@ -87,19 +89,28 @@
     if(route==='invite'){
       const token=await rpc('invite');const url=new URL(location.pathname,location.origin);url.hash=new URLSearchParams({invite:token}).toString();return {url:url.href};
     }
-    if(route==='messages' && options.method==='POST')return {message:await rpc('send',{p_text:body.text,p_nonce:body.nonce})};
+    if(route==='messages' && options.method==='POST')return {message:await rpc('post',{p_text:body.text,p_nonce:body.nonce,p_reply:body.reply||null})};
+    if(route==='edit')return {message:await rpc('edit',{p_id:body.id,p_text:body.text})};
+    if(route==='delete')return {message:await rpc('delete',{p_id:body.id})};
+    if(route==='react')return {message:await rpc('react',{p_id:body.id,p_emoji:body.emoji||null})};
+    if(route==='read'){await rpc('read',{p_id:body.id});return {};}
+    if(route==='typing'){await rpc('typing',{p_on:!!body.on});return {};}
     if(route==='messages')return messages(params);
     if(route==='events'){
       if(Date.now()-lastHeartbeat>25000){await rpc('profile');lastHeartbeat=Date.now();}
       const result=await messages(params);
-      const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen'));
-      return {...result,people:people.map(p=>({...p,online:Date.now()-Date.parse(p.last_seen)<90000}))};
+      const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing'));
+      return {...result,people:people.map(person)};
     }
     throw fail('Неизвестный запрос.');
   }
+  // callback('message',строка) — новое или изменённое сообщение; callback('member',участник) — «прочитано», «печатает», имя.
   function watch(callback){
     pendingCallback=callback;if(channel)return;
-    channel=db().channel('mayak-messages').on('postgres_changes',{event:'INSERT',schema:'public',table:'mayak_messages'},()=>pendingCallback?.()).subscribe(status=>{if(status==='SUBSCRIBED')pendingCallback?.();});
+    channel=db().channel('mayak-messages')
+      .on('postgres_changes',{event:'*',schema:'public',table:'mayak_messages'},payload=>{if(payload.new&&payload.new.id)pendingCallback?.('message',payload.new);})
+      .on('postgres_changes',{event:'*',schema:'public',table:'mayak_members'},payload=>{if(payload.new&&payload.new.id)pendingCallback?.('member',person(payload.new));})
+      .subscribe(status=>{if(status==='SUBSCRIBED')pendingCallback?.('ready');});
   }
   function stop(){pendingCallback=null;if(channel){db().removeChannel(channel).catch(()=>{});channel=null;}lastHeartbeat=0;}
   window.MayakCloud={api,watch,stop};

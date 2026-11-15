@@ -101,7 +101,8 @@ async function deliver(id) {
   let sent = 0;
   await Promise.all(job.subscriptions.map(async (subscription) => {
     try {
-      const status = await sendPush(subscription, payload, privateKey);
+      // badge — число непрочитанных именно этого получателя, для значка на иконке.
+      const status = await sendPush(subscription, { ...payload, badge: subscription.badge || 0 }, privateKey);
       if (status >= 200 && status < 300) sent++;
       else if (status === 404 || status === 410) gone.push(subscription.endpoint);
       else failed.push(new URL(subscription.endpoint).hostname + ' ' + status);

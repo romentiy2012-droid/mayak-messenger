@@ -11,3 +11,129 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 #join-mode {width:100%;padding:12px;border:1px solid #bdcec5;border-radius:10px;background:#fff;color:#183e34;font:inherit;margin:6px 0 14px;}
+
+/* ===== 2.2: крупнее мелкий текст ===== */
+.message-text{font-size:14px}.message-author{font-size:11px}.message-meta{font-size:10px}.day-divider{font-size:10px}.chat-header .network-status{font-size:11px}.composer-footnote{font-size:10px}.thread-start{font-size:9px}.person-name{font-size:13px}.offline-banner,.push-banner{font-size:12px}.push-banner button{font-size:12px}
+@media(max-width:760px){.message-text{font-size:16px;line-height:1.45}.message-author{font-size:12px}.message-meta{font-size:11px}.day-divider{font-size:11px}.chat-header h1{font-size:17px}.chat-header .network-status{font-size:12px}.composer-footnote{font-size:10px}.thread-start{font-size:9px}.offline-banner{font-size:12px}.push-banner,.push-banner button{font-size:13px}}
+
+/* ===== 2.2: ответы, реакции, действия с сообщением ===== */
+.message-row{touch-action:pan-y}
+.message-bubble{position:relative;-webkit-touch-callout:none}
+@media(hover:none){.message-text{-webkit-user-select:none;user-select:none}}
+.message-row.deleted .message-text{font-style:italic;color:#9aa89c}
+.message-quote{display:block;width:100%;text-align:left;border:0;border-left:3px solid #7fb39a;background:#f1f6ef;border-radius:6px;padding:5px 8px;margin:2px 0 6px;font-size:12px;line-height:1.35;color:#5d7464;overflow:hidden}
+.own .message-quote{background:#cbe8d6}
+.message-quote strong{display:block;font-size:11px;font-weight:650;color:#2f7a63}
+.message-quote span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.message-reactions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.reaction{border:1px solid #dfe7dc;background:#f4f7f1;border-radius:20px;padding:2px 9px;font-size:14px;line-height:1.5;min-height:28px;color:#4f6b58}
+.reaction.mine{background:#d3ecde;border-color:#8fc4a8}
+.own .reaction{background:#eaf6ee;border-color:#c3dfcf}
+.own .reaction.mine{background:#fff;border-color:#69a98a}
+.edited-mark{margin-right:5px}
+.delivery-tick.read{color:#168a68;letter-spacing:-3px;padding-right:3px}
+.message-more{display:none;border:0;background:none;color:#9aa89c;font-size:18px;line-height:1;min-width:30px;min-height:30px;border-radius:8px;align-self:center;opacity:0}
+.message-row.own .message-more{order:-1}
+@media(hover:hover){.message-more{display:block}.message-row:hover .message-more,.message-more:focus-visible{opacity:1}.message-more:hover{background:#eef3ea}}
+.message-row.flash .message-bubble{animation:mayak-flash 1.3s}
+@keyframes mayak-flash{0%,55%{box-shadow:0 0 0 3px #69b69d}100%{box-shadow:0 0 0 3px #69b69d00}}
+.network-status.typing{color:var(--green)}
+.composer-area{position:relative}
+.composer-context{display:flex;align-items:center;gap:10px;max-width:820px;margin:0 auto 8px;padding:6px 6px 6px 12px;border-left:3px solid var(--green);background:#f1f6ef;border-radius:8px;font-size:12px;line-height:1.35}
+.composer-context>div{flex:1;min-width:0}
+.composer-context strong{display:block;font-size:11px;font-weight:650;color:var(--green)}
+.composer-context span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7f72}
+.composer-context button{border:0;background:none;font-size:22px;line-height:1;min-width:34px;min-height:34px;border-radius:8px;color:#8ba08c}
+.jump-button{position:absolute;right:18px;top:-54px;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--green);box-shadow:0 4px 14px #1b3a2a22;display:flex;align-items:center;justify-content:center;z-index:5}
+.jump-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.jump-count{position:absolute;top:-7px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--green);color:#fff;font-size:11px;font-weight:650;line-height:20px;text-align:center}
+.sheet-layer{position:fixed;z-index:60;left:0;right:0;top:var(--app-top,0px);height:var(--app-height,100%);background:#20382a55;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:440px;background:#fff;border-radius:18px 18px 0 0;padding:14px 14px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 50px #16342226}
+@media(min-width:761px){.sheet-layer{align-items:center}.sheet{border-radius:18px;padding-bottom:10px}}
+.sheet-reactions{display:flex;gap:5px;margin-bottom:10px}
+.sheet-emoji{flex:1;border:0;background:#f1f5ee;border-radius:12px;padding:0;font-size:24px;line-height:1;min-height:48px}
+.sheet-emoji.mine{background:#cfe9da;box-shadow:inset 0 0 0 2px #69a98a}
+.sheet-preview{font-size:13px;color:#7c8f7b;margin:0 4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-question{font-size:16px;margin:6px 4px 12px}
+.sheet-action{display:block;width:100%;border:0;border-top:1px solid var(--line);background:none;text-align:left;padding:13px 6px;font-size:16px;min-height:48px}
+.sheet-action.danger{color:var(--danger)}
+.sheet-action.quiet{color:var(--muted);text-align:center}
+
+/* ===== 2.2: тёмная тема (html[data-theme=dark] ставит theme.js) ===== */
+html[data-theme=dark]{color-scheme:dark;--ink:#e3ebe5;--muted:#8c9c93;--green:#2a917a;--green-dark:#237a67;--line:#2a3731;--paper:#0f1513;--sidebar:#141c18;--mint:#1c4a3c;--white:#131a17;--danger:#e58378}
+html[data-theme=dark] input{background:#19221e;border-color:#2f3d36}
+html[data-theme=dark] input:focus{border-color:#3f8f79}
+html[data-theme=dark] input::placeholder,html[data-theme=dark] textarea::placeholder{color:#6f8077}
+html[data-theme=dark] .small-label,html[data-theme=dark] .welcome-footer,html[data-theme=dark] .network-status{color:#8c9c93}
+html[data-theme=dark] .network-status.disconnected{color:#d2a273}
+html[data-theme=dark] .network-status.typing{color:#5cc2a6}
+html[data-theme=dark] .art-disc{background:#1b2621}
+html[data-theme=dark] .art-wave{border-top-color:#33453c}
+html[data-theme=dark] .art-message{background:#243029;box-shadow:none}
+html[data-theme=dark] .eyebrow{color:#5cc2a6}
+html[data-theme=dark] .password-note,html[data-theme=dark] .join-note{color:#8c9c93}
+html[data-theme=dark] .sidebar-label,html[data-theme=dark] .people-heading,html[data-theme=dark] .small-signal,html[data-theme=dark] .sidebar-bottom>p,html[data-theme=dark] .profile-button small,html[data-theme=dark] .profile-edit,html[data-theme=dark] .person-name small{color:#7f9085}
+html[data-theme=dark] .room-tile{background:#1c2823;border-color:#2a3731}
+html[data-theme=dark] .room-tile span{color:#8c9c93}
+html[data-theme=dark] .room-icon{background:#131a17;color:#5cc2a6}
+html[data-theme=dark] .people-heading>span:last-child{background:#1f2a25}
+html[data-theme=dark] .profile-button-wrap{border-top-color:#2a3731}
+html[data-theme=dark] .palette-0{background:#22392c;color:#8fd0a6}
+html[data-theme=dark] .palette-1{background:#3a3423;color:#d9bd7e}
+html[data-theme=dark] .palette-2{background:#22353d;color:#93bccb}
+html[data-theme=dark] .palette-3{background:#3b2b25;color:#d9a48d}
+html[data-theme=dark] .palette-4{background:#302a3d;color:#b9a8d6}
+html[data-theme=dark] .palette-5{background:#33361f;color:#c2ca8a}
+html[data-theme=dark] .conversation,html[data-theme=dark] .composer-area{background:#131a17}
+html[data-theme=dark] .chat-header{background:#19221e}
+html[data-theme=dark] .composer-area{border-top-color:#232e29}
+html[data-theme=dark] .icon-button:hover,html[data-theme=dark] .message-more:hover{background:#232e29}
+html[data-theme=dark] .invite-button{background:#19221e;border-color:#2f3d36}
+html[data-theme=dark] .invite-button>span:first-child,html[data-theme=dark] .text-button{color:#5cc2a6}
+html[data-theme=dark] .offline-banner{background:#3a2f18;color:#e3c483}
+html[data-theme=dark] .push-banner{background:#18261f;color:#a9c4b3}
+html[data-theme=dark] #push-dismiss{color:#7f9085}
+html[data-theme=dark] .messages-scroll{scrollbar-color:#33453c transparent}
+html[data-theme=dark] .thread-start{color:#6f8077}
+html[data-theme=dark] .thread-start>div{background:#232e29}
+html[data-theme=dark] .empty-chat,html[data-theme=dark] .empty-chat p{color:#7f9085}
+html[data-theme=dark] .empty-chat h2{color:#a9c4b3}
+html[data-theme=dark] .empty-icon{background:#19221e;border-color:#2a3731}
+html[data-theme=dark] .day-divider{color:#8c9c93}
+html[data-theme=dark] .day-divider span{background:#19221e;border-color:#2a3731}
+html[data-theme=dark] .message-bubble{background:#1f2a25;border-color:#2c3a33;box-shadow:none}
+html[data-theme=dark] .own .message-bubble{background:#1c4a3c;border-color:#26604e}
+html[data-theme=dark] .message-author{color:#8fc7a6}
+html[data-theme=dark] .message-text{color:#e3ebe5}
+html[data-theme=dark] .message-text a{color:#7fd6ba}
+html[data-theme=dark] .message-meta{color:#7f9085}
+html[data-theme=dark] .own .message-meta{color:#8fbfa9}
+html[data-theme=dark] .delivery-tick{color:#8fbfa9}
+html[data-theme=dark] .delivery-tick.read{color:#63d9b5}
+html[data-theme=dark] .message-row.deleted .message-text{color:#7f9085}
+html[data-theme=dark] .message-quote{background:#19221e;border-left-color:#3f8f79;color:#a9bdb1}
+html[data-theme=dark] .own .message-quote{background:#163a30}
+html[data-theme=dark] .message-quote strong{color:#7fd6ba}
+html[data-theme=dark] .reaction{background:#19221e;border-color:#33453c;color:#c9d6cd}
+html[data-theme=dark] .reaction.mine{background:#1c4a3c;border-color:#3f8f79}
+html[data-theme=dark] .own .reaction{background:#163a30;border-color:#2c6a57}
+html[data-theme=dark] .own .reaction.mine{background:#2a917a;border-color:#63d9b5;color:#fff}
+html[data-theme=dark] .older-button{background:#19221e;color:#a9c4b3}
+html[data-theme=dark] .composer{background:#19221e;border-color:#2f3d36;box-shadow:none}
+html[data-theme=dark] .composer:focus-within{border-color:#3f8f79}
+html[data-theme=dark] .send-button:disabled{background:#26332d;color:#6f8077}
+html[data-theme=dark] .composer-footnote{color:#6f8077}
+html[data-theme=dark] .composer-context{background:#19221e}
+html[data-theme=dark] .composer-context strong{color:#7fd6ba}
+html[data-theme=dark] .composer-context span{color:#a9bdb1}
+html[data-theme=dark] .jump-button{background:#19221e;color:#7fd6ba;box-shadow:0 4px 14px #0008}
+html[data-theme=dark] .dialog-layer,html[data-theme=dark] .sheet-layer{background:#000a}
+html[data-theme=dark] .dialog-card,html[data-theme=dark] .sheet{background:#19221e;box-shadow:0 25px 90px #0009}
+html[data-theme=dark] .dialog-card p,html[data-theme=dark] .dialog-card li,html[data-theme=dark] .sheet-preview{color:#a9bdb1}
+html[data-theme=dark] .dialog-close{color:#8c9c93}
+html[data-theme=dark] .dialog-card .link-field{color:#a9c4b3}
+html[data-theme=dark] .sheet-emoji{background:#232e29}
+html[data-theme=dark] .sheet-emoji.mine{background:#1c4a3c;box-shadow:inset 0 0 0 2px #3f8f79}
+html[data-theme=dark] .toast{background:#e3ebe5;color:#15201b}
+html[data-theme=dark] button:focus-visible,html[data-theme=dark] a:focus-visible,html[data-theme=dark] input:focus-visible{outline-color:#3f8f79}
+.dialog-card p,.dialog-card li{font-size:14px}.dialog-card .quiet-button{font-size:14px;min-height:44px}.dialog-card .about-note{font-size:12px}

@@ -1,5 +1,5 @@
-const CACHE = 'mayak-shell-2.1.3:' + self.registration.scope;
-const SHELL = ['./', './style.css', './app.js', './cloud.js', './vendor/supabase.js', './config.js', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.webmanifest'].map(path=>new URL(path,self.registration.scope).href);
+const CACHE = 'mayak-shell-2.2.0:' + self.registration.scope;
+const SHELL = ['./', './style.css', './theme.js', './app.js', './cloud.js', './vendor/supabase.js', './config.js', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.webmanifest'].map(path=>new URL(path,self.registration.scope).href);
 self.addEventListener('install', event => {event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));});
 self.addEventListener('activate', event => {event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('mayak-shell-') && key !== CACHE && (!key.includes(':http') || key.endsWith(':' + self.registration.scope))).map(key => caches.delete(key)))).then(() => self.clients.claim()));});
 self.addEventListener('fetch', event => {
@@ -17,6 +17,8 @@ self.addEventListener('push', event => {
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({type:'window', includeUncontrolled:true});
     const open = windows.some(client => client.visibilityState === 'visible' && client.url.startsWith(self.registration.scope));
+    // Число непрочитанных на иконке приложения.
+    try {if(Number(data.badge) > 0 && self.navigator.setAppBadge) await self.navigator.setAppBadge(Number(data.badge));} catch(_error) {}
     if(open && !ALWAYS_SHOW) return;
     await self.registration.showNotification(String(data.title || 'Маяк').slice(0, 60), {
       body: String(data.body || 'Новое сообщение'), icon: new URL('./icon-192.png', self.registration.scope).href,

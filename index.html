@@ -13,6 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="manifest" href="./manifest.webmanifest">
+  <script src="./theme.js"></script>
   <link rel="stylesheet" href="./style.css">
   <script src="./config.js" defer></script>
   <script src="./vendor/supabase.js" defer></script>
@@ -65,11 +66,12 @@
         <div id="empty-chat" class="empty-chat"><div class="empty-icon" aria-hidden="true"><img src="./icon.svg" width="58" height="58" alt=""></div><h2>Первое сообщение — за вами</h2><p>Поздоровайтесь с друзьями.<br>С этого начнётся ваша переписка.</p></div>
         <div id="messages" class="messages"></div>
       </div>
-      <div class="composer-area"><p id="send-error" class="send-error" role="alert" hidden></p><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Участники и ваше имя"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.1.3</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
+      <div class="composer-area"><button id="jump-button" class="jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></button><p id="send-error" class="send-error" role="alert" hidden></p><div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" type="button" aria-label="Отменить">×</button></div><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Участники и ваше имя"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.2.0</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
     </section>
   </main>
 
   <div id="dialog-layer" class="dialog-layer" hidden><section class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button id="dialog-close" class="dialog-close icon-button" type="button" aria-label="Закрыть">×</button><div id="dialog-content"></div></section></div>
+  <div id="sheet-layer" class="sheet-layer" hidden><section id="sheet" class="sheet" role="dialog" aria-modal="true" aria-label="Действия с сообщением"></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>
