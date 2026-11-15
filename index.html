@@ -30,9 +30,8 @@
         <p class="welcome-description">Один общий чат. Знакомые имена.<br>И ничего лишнего между вами.</p>
         <form id="join-form">
           <label for="join-mode">Вход или регистрация</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
-          <label for="join-email">Электронная почта</label><input id="join-email" type="email" autocomplete="email" required placeholder="name@example.com">
-          <label for="join-name">Имя для первого входа</label>
-          <input id="join-name" name="name" autocomplete="nickname" maxlength="32" placeholder="Ваше имя" required>
+          <label for="join-name">Ваше имя</label>
+          <input id="join-name" name="name" autocomplete="username" maxlength="32" placeholder="Ваше имя" required>
           <label for="join-password">Пароль</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required><p class="password-note">Для первого входа выберите «Регистрация». Старые пароли с Meizu сюда не перенесены.</p>
           <div id="invite-field" hidden><label for="join-invite">Приглашение для первого входа</label><input id="join-invite" name="invite" autocomplete="off" placeholder="Код из ссылки владельца"></div>
           <p id="join-error" class="form-error" role="alert"></p>
