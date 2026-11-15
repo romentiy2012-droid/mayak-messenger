@@ -272,9 +272,15 @@
     }));
   }
   function resizeComposer() {const input=$('message-input');input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px';$('send-button').disabled=state.sending||!input.value.trim();}
+  // iOS при открытии клавиатуры не сжимает страницу, а сдвигает видимую область:
+  // чат подгоняется под неё по высоте и по сдвигу, иначе над клавиатурой остаётся пустота.
   function adjustViewport() {
-    if(window.visualViewport && window.innerWidth<=760) document.documentElement.style.setProperty('--app-height',window.visualViewport.height+'px');
-    else document.documentElement.style.removeProperty('--app-height');
+    const root=document.documentElement.style, view=window.visualViewport;
+    if(!view || window.innerWidth>760){root.removeProperty('--app-height');root.removeProperty('--app-top');return;}
+    const scroll=$('messages-scroll'), atBottom=scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<80;
+    root.setProperty('--app-height',view.height+'px');
+    root.setProperty('--app-top',Math.max(0,view.offsetTop)+'px');
+    if(atBottom) scrollBottom();
   }
   $('join-form').addEventListener('submit',async event=>{
     event.preventDefault();$('join-error').textContent='';$('join-button').disabled=true;
@@ -320,7 +326,9 @@
   window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1)).get('invite');if(next){invitation=next;if(!state.user)showJoin();}});
   window.addEventListener('offline',()=>connection(false));
   window.addEventListener('resize',adjustViewport);
-  if(window.visualViewport)window.visualViewport.addEventListener('resize',adjustViewport);
+  if(window.visualViewport){window.visualViewport.addEventListener('resize',adjustViewport);window.visualViewport.addEventListener('scroll',adjustViewport);}
+  $('message-input').addEventListener('focus',()=>{adjustViewport();setTimeout(adjustViewport,120);setTimeout(adjustViewport,400);});
+  $('message-input').addEventListener('blur',()=>setTimeout(adjustViewport,120));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){clearNotifications();poll();}}});
   async function boot() {
     $('invite-field').hidden=!!invitation || $('join-mode').value !== 'register';
