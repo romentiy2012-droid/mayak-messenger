@@ -1,0 +1,35 @@
+{
+  "name": "mayak-messenger",
+  "version": "2.0.0",
+  "description": "Маяк — закрытый облачный PWA-чат",
+  "main": "app.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "esbuild src/supabase-client.js --bundle --format=iife --global-name=MayakSupabase --minify --target=safari15,chrome100 --outfile=vendor/supabase.js",
+    "test": "node --test tests/database.test.cjs",
+    "test:ui": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/romentiy2012-droid/mayak-messenger.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/romentiy2012-droid/mayak-messenger/issues"
+  },
+  "homepage": "https://github.com/romentiy2012-droid/mayak-messenger#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "2.119.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@playwright/test": "1.65.1",
+    "esbuild": "0.28.2"
+  },
+  "private": true
+}

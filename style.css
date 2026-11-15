@@ -8,3 +8,5 @@
 .password-note{font-size:10px;color:#8a9c86;line-height:1.6;margin:7px 0 12px}.app-shell{height:var(--app-height,100dvh)}
 @media(max-width:760px) and (max-height:800px){.welcome-art{display:none}.welcome-content{padding-top:31px;padding-bottom:22px}.join-card h1{font-size:43px;margin-bottom:17px}.eyebrow{margin-bottom:14px}.welcome-description{margin-bottom:20px}.welcome-footer{margin-top:12px}.welcome-top .brand{font-size:27px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+#join-mode {width:100%;padding:12px;border:1px solid #bdcec5;border-radius:10px;background:#fff;color:#183e34;font:inherit;margin:6px 0 14px;}

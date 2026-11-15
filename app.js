@@ -1,21 +1,8 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const config = window.MAYAK_CONFIG || {};
-  const configuredAPI = config.apiBaseURL || '';
-  let apiURL = configuredAPI ? new URL(configuredAPI) : new URL(location.origin);
-  if(configuredAPI && (apiURL.protocol !== 'https:' || apiURL.username || apiURL.password || apiURL.search || apiURL.hash || apiURL.pathname !== '/')) throw new Error('Неверный адрес сервера Маяка.');
-  const remote = apiURL.origin !== location.origin;
-  let safeStorage;
-  try {safeStorage = localStorage;} catch(_error) {safeStorage = {getItem:()=>null,setItem:()=>{}};}
-  const directory = config.endpointDirectory ? window.MayakEndpoint.create(config, {fetch:window.fetch.bind(window), storage:safeStorage, baseURL:location.href}) : null;
-  const storageKey = 'mayak.session:' + location.pathname + ':' + (config.serverId || apiURL.origin);
-  let sessionToken = '';
-  try {if(remote) sessionToken=localStorage.getItem(storageKey)||'';} catch(_error) {}
-  function rememberToken(token) {
-    sessionToken=token;
-    if(remote) {try {if(token) localStorage.setItem(storageKey,token);else localStorage.removeItem(storageKey);} catch(_error) {if(token) toast('Вход сохранён до закрытия приложения. Браузер запретил постоянное хранение.');}}
-  }
+  const api = (path,options) => window.MayakCloud.api(path,options);
+  let generation = 0;
   const state = {user:null, csrf:'', messages:[], people:[], last:0, older:false, online:false,
     polling:false, pollCount:0, sending:false, inviteURL:'', install:null, draft:null,
     streamController:null, lastChunk:0, retryDelay:1000};
@@ -40,45 +27,12 @@
     $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {$('toast').hidden = true;}, 3500);
   }
-  async function refreshEndpoint(force=false) {
-    if(!directory) return false;
-    const changed = await directory.refresh(force);
-    apiURL = new URL(directory.origin);
-    if(changed && state.streamController) state.streamController.abort();
-    return changed;
-  }
-  async function api(path, options = {}, retry=true) {
-    try {await refreshEndpoint(false);} catch(_error) {if(directory) apiURL = new URL(directory.origin);}
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
-    try {
-      const headers = Object.assign({}, options.body ? {'Content-Type':'application/json','X-Mayak-CSRF':state.csrf} : {}, options.headers || {});
-      if(remote) {
-        if(/\.ngrok-free\.(app|dev)$/.test(apiURL.hostname)) headers['ngrok-skip-browser-warning']='1';
-        if(apiURL.hostname.endsWith('.zrok.io')) headers.skip_zrok_interstitial='1';
-        if(sessionToken) headers.Authorization='Bearer '+sessionToken;
-      }
-      const response = await fetch(apiURL.origin + '/api/' + path, Object.assign({cache:'no-store'}, options, {credentials:remote?'omit':'same-origin',headers, signal:controller ? controller.signal : undefined}));
-      if(options.stream && response.ok) return {response,controller};
-      let value;
-      try {value=await response.json();} catch(_error) {throw new Error('Сервер пока недоступен. Попробуйте ещё раз чуть позже.');}
-      if(!response.ok) {
-        const error = new Error(value.error || 'Не удалось выполнить запрос.'); error.status = response.status; throw error;
-      }
-      return value;
-    } catch(error) {
-      if(directory && retry && (!error.status || error.status>=500)) {
-        try {if(await refreshEndpoint(true)) return api(path,options,false);} catch(_error) {}
-      }
-      throw error;
-    } finally {if(timeout) clearTimeout(timeout);}
-  }
   function connection(online) {
     state.online = online;
     const active = state.people.filter(person => person.online).length;
     [$('welcome-network'), $('connection-status')].forEach(node => {
       node.classList.toggle('disconnected', !online); node.replaceChildren(element('i'));
-      node.appendChild(document.createTextNode(online ? (state.user ? active + ' в сети · телефон подключён' : 'Телефон на связи') : 'Нет соединения'));
+      node.appendChild(document.createTextNode(online ? (state.user ? active + ' в сети · облачный чат' : 'Облако на связи') : 'Нет соединения'));
     });
     $('offline-banner').hidden = online || !state.user;
   }
@@ -87,7 +41,7 @@
     invitation = '';
   }
   function showChat(session) {
-    if(session.token) rememberToken(session.token);
+
     state.user = session.user; state.csrf = session.csrf;
     $('welcome').hidden = true; $('chat').hidden = false;
     document.querySelectorAll('.room-name').forEach(node => {node.textContent = session.room || 'Наш круг';});
@@ -98,7 +52,7 @@
     adjustViewport();
   }
   function showJoin() {
-    if(state.streamController) state.streamController.abort();
+    generation++; window.MayakCloud.stop();
     clearTimeout(timer);
     state.messages=[];state.people=[];state.last=0;state.older=false;state.inviteURL='';state.csrf='';
     $('messages').replaceChildren();$('people-list').replaceChildren();
@@ -172,45 +126,23 @@
   async function poll(initial=false) {
     if(!state.user || state.polling) return;
     state.polling=true;
-    let reader=null, watchdog=null;
+    const current=generation;
+    let more=false;
     try {
-      const stream=await api('events?after='+state.last,{stream:true});
-      state.streamController=stream.controller;
-      if(!stream.response.body) throw new Error('Браузер не поддерживает живую связь. Откройте чат в Chrome или Safari.');
-      reader=stream.response.body.getReader();
-      const decoder=new TextDecoder();let buffer='',first=true;
-      const armWatchdog=()=>{clearTimeout(watchdog);if(stream.controller) watchdog=setTimeout(()=>stream.controller.abort(),35000);};
-      armWatchdog();
-      while(state.user) {
-        const chunk=await reader.read();
-        if(chunk.done) break;
-        state.lastChunk=Date.now();state.retryDelay=1000;armWatchdog();
-        buffer+=decoder.decode(chunk.value,{stream:true});
-        if(buffer.length>1048576) throw new Error('Ответ сервера слишком большой.');
-        let boundary;
-        while((boundary=buffer.indexOf('\n\n'))>=0) {
-          const event=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
-          const data=event.split('\n').filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
-          if(!data) continue;
-          const result=JSON.parse(data);
-          if(result.signed_out){rememberToken('');showJoin();$('join-error').textContent='Войдите снова с прежним именем и паролем.';return;}
-          if(result.messages){
-            if(first && !state.last) state.older=result.has_older;
-            mergeMessages(result.messages,first && initial?'initial':'new');
-          }
-          if(result.people){state.people=result.people;renderPeople();}
-          first=false;connection(true);
-        }
-      }
+      const result=await api('events?after='+state.last);
+      if(current!==generation || !state.user)return;
+      if(!state.last)state.older=result.has_older;
+      mergeMessages(result.messages,initial?'initial':'new');
+      state.people=result.people;renderPeople();connection(true);
+      more=result.has_more;state.retryDelay=1000;
+      window.MayakCloud.watch(()=>poll());
     } catch(error) {
+      if(current!==generation)return;
       connection(false);
-      if(error.status===401) {rememberToken('');showJoin();$('join-error').textContent='Войдите снова с прежним именем и паролем.';}
-      state.retryDelay=Math.min(state.retryDelay*2,30000);
+      if(error.status===401 || error.status===403){showJoin();$('join-error').textContent=error.message;}
     } finally {
-      clearTimeout(watchdog);
-      if(reader) reader.cancel().catch(()=>{});
-      state.streamController=null;state.polling=false;clearTimeout(timer);
-      if(state.user) timer=setTimeout(()=>poll(),state.retryDelay);
+      state.polling=false;clearTimeout(timer);
+      if(state.user)timer=setTimeout(()=>poll(),more?100:15000);
     }
   }
   function dialog(title) {
@@ -227,9 +159,9 @@
   }
   async function inviteDialog() {
     const content=dialog('Позовите своих');
-    content.appendChild(element('p','','По этой ссылке можно войти и прочитать историю чата. Отправляйте её только своим.'));
+    content.appendChild(element('p','','Одноразовое приглашение на 7 дней: даёт доступ ко всей истории. Новое приглашение отменяет предыдущее неиспользованное. Отправляйте только своим.'));
     try {
-      if(!state.inviteURL) state.inviteURL=(await api('invite')).url;
+      state.inviteURL=(await api('invite')).url;
       content.appendChild(element('div','link-field',state.inviteURL));
       content.appendChild(button('Скопировать приглашение',()=>copyText(state.inviteURL).then(()=>toast('Приглашение скопировано')).catch(error=>toast(error.message)),'primary-button'));
       if(navigator.share) content.appendChild(button('Отправить ссылку…',()=>navigator.share({title:'Маяк — наш круг',text:'Заходи в наш чат',url:state.inviteURL}).catch(()=>{})));
@@ -266,14 +198,14 @@
   }
   function aboutDialog() {
     const content=dialog('Небольшой чат для своих');
-    content.appendChild(element('p','','«Маяк» работает на телефоне владельца. Здесь одна общая переписка, а вход — по приглашению.'));
+    content.appendChild(element('p','','«Маяк» работает в облаке. Здесь одна общая переписка, а первый вход — по приглашению.'));
     content.appendChild(button('Установить приложение',installApp));
     content.appendChild(button('Участники и ваше имя',profileDialog));
     if(state.user.owner) content.appendChild(button('Пригласить друзей',inviteDialog));
-    content.appendChild(element('p','about-note','История хранится на Meizu. Соединение защищено HTTPS, но сквозного шифрования здесь нет. Если телефон выключен или потерял интернет, чат временно недоступен.'));
-    content.appendChild(element('p','about-note',remote?'Адрес приложения постоянный. Если связь с Meizu прервётся, переписка появится после восстановления соединения. Маяк 1.1.0.':'Локальная версия на телефоне владельца. Маяк 1.1.0.'));
+    content.appendChild(element('p','about-note','История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. Meizu для работы не нужен. Новые сообщения появляются, пока приложение открыто; фоновых push-уведомлений пока нет.'));
+    content.appendChild(element('p','about-note','Маяк 2.0.0 · облачная версия.'));
     content.appendChild(button('Выйти на этом устройстве',async()=>{
-      try {await api('logout',{method:'POST',body:'{}'});rememberToken('');closeDialog();$('message-input').value='';state.draft=null;showJoin();}
+      try {await api('logout',{method:'POST',body:'{}'});closeDialog();$('message-input').value='';state.draft=null;showJoin();}
       catch(error){toast(error.message);}
     }));
   }
@@ -286,8 +218,8 @@
     event.preventDefault();$('join-error').textContent='';$('join-button').disabled=true;
     let invite=invitation||$('join-invite').value.trim();
     if(invite.includes('#')) {try {invite=new URLSearchParams(new URL(invite).hash.slice(1)).get('invite')||invite;}catch(_error){}}
-    try {const result=await api('join',{method:'POST',body:JSON.stringify({name:$('join-name').value,password:$('join-password').value,invite,auth_mode:remote?'bearer':'cookie'})});$('join-password').value='';showChat(result);await poll(true);}
-    catch(error){$('join-error').textContent=error.status?error.message:'Телефон пока недоступен. Проверьте интернет и попробуйте ещё раз.';}
+    try {const result=await api('join',{method:'POST',body:JSON.stringify({name:$('join-name').value,email:$('join-email').value,register:$('join-mode').value==='register',password:$('join-password').value,invite})});$('join-password').value='';showChat(result);await poll(true);}
+    catch(error){$('join-error').textContent=error.status?error.message:'Облако недоступно. Проверьте интернет и попробуйте ещё раз.';}
     finally{$('join-button').disabled=false;}
   });
   $('message-form').addEventListener('submit',async event=>{
@@ -320,28 +252,24 @@
   });
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();state.install=event;$('install-button').hidden=false;});
   window.addEventListener('appinstalled',()=>{$('install-button').hidden=true;toast('Маяк добавлен на главный экран');});
-  window.addEventListener('online',()=>{if(state.user){if(state.streamController)state.streamController.abort();poll();}else boot();});
+  window.addEventListener('online',()=>{if(state.user){poll();}else boot();});
   window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1)).get('invite');if(next){invitation=next;if(!state.user)$('invite-field').hidden=true;}});
   window.addEventListener('offline',()=>connection(false));
   window.addEventListener('resize',adjustViewport);
   if(window.visualViewport)window.visualViewport.addEventListener('resize',adjustViewport);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){if(state.streamController && Date.now()-state.lastChunk>12000)state.streamController.abort();poll();}}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){poll();}}});
   async function boot() {
     $('invite-field').hidden=!!invitation;
     try {const session=await api('session');showChat(session);await poll(true);}
-    catch(error) {showJoin();if(error.status===401){rememberToken('');try{await api('health');connection(true);}catch(_error){connection(false);}}else{connection(false);$('join-error').textContent='Телефон пока недоступен. Попробуйте открыть чат чуть позже.';}}
+    catch(error) {showJoin();if(error.status===401){try{await api('health');connection(true);}catch(_error){connection(false);}}else{connection(false);$('join-error').textContent=error.message || 'Не удалось подключиться к облаку.';}}
   }
   if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  $('join-name').required=false;
   adjustViewport();boot();
-  setInterval(async()=>{
-    try {
-      const changed=await refreshEndpoint(false);
-      if(state.user && changed) poll();
-      else if(!state.user && sessionToken) boot();
-      else if(!state.user) {
-        await api('health');connection(true);
-        if($('join-error').textContent.startsWith('Телефон пока недоступен.')) $('join-error').textContent='';
-      }
-    } catch(_error) {if(!state.user) connection(false);}
-  },15000);
+  $('join-mode').addEventListener('change',()=>{
+    const register=$('join-mode').value==='register';
+    $('join-name').required=register;
+    $('join-password').autocomplete=register?'new-password':'current-password';
+    $('join-button').textContent=register?'Создать аккаунт и войти':'Войти в чат';
+  });
 })();

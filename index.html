@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.lhr.life; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#176d5d">
   <meta name="description" content="Маяк — небольшой чат для своих. Вход по приглашению.">
@@ -15,7 +15,8 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./style.css">
   <script src="./config.js" defer></script>
-  <script src="./endpoint.js" defer></script>
+  <script src="./vendor/supabase.js" defer></script>
+  <script src="./cloud.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -28,9 +29,11 @@
         <h1 id="welcome-title">Свои<br> на связи<span>.</span></h1>
         <p class="welcome-description">Один общий чат. Знакомые имена.<br>И ничего лишнего между вами.</p>
         <form id="join-form">
-          <label for="join-name">Как вас зовут?</label>
+          <label for="join-mode">Вход или регистрация</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
+          <label for="join-email">Электронная почта</label><input id="join-email" type="email" autocomplete="email" required placeholder="name@example.com">
+          <label for="join-name">Имя для первого входа</label>
           <input id="join-name" name="name" autocomplete="nickname" maxlength="32" placeholder="Ваше имя" required>
-          <label for="join-password">Пароль</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required><p class="password-note">При первом входе придумайте пароль. Потом используйте его снова.</p>
+          <label for="join-password">Пароль</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required><p class="password-note">Для первого входа выберите «Регистрация». Старые пароли с Meizu сюда не перенесены.</p>
           <div id="invite-field" hidden><label for="join-invite">Приглашение для первого входа</label><input id="join-invite" name="invite" autocomplete="off" placeholder="Код из ссылки владельца"></div>
           <p id="join-error" class="form-error" role="alert"></p>
           <button id="join-button" class="primary-button" type="submit">Войти в чат <span aria-hidden="true">↗</span></button>
@@ -48,14 +51,14 @@
       <div class="room-tile"><div class="room-icon" aria-hidden="true">#</div><div><strong class="room-name">Наш круг</strong><span>Общий чат</span></div><i class="selected-dot"></i></div>
       <div class="people-heading"><span>УЧАСТНИКИ</span><span id="people-count">0</span></div>
       <div id="people-list" class="people-list"></div>
-      <div class="sidebar-bottom"><span class="small-signal"><i></i> Сервер на Meizu</span><p>Свои люди.<br>На одной волне.</p><div class="profile-button-wrap"><button id="profile-button" class="profile-button" type="button"><span id="my-avatar" class="avatar palette-0"></span><span><strong id="my-name"></strong><small>Изменить имя</small></span><span class="profile-edit" aria-hidden="true">↗</span></button></div></div>
+      <div class="sidebar-bottom"><span class="small-signal"><i></i> Облачный чат</span><p>Свои люди.<br>На одной волне.</p><div class="profile-button-wrap"><button id="profile-button" class="profile-button" type="button"><span id="my-avatar" class="avatar palette-0"></span><span><strong id="my-name"></strong><small>Изменить имя</small></span><span class="profile-edit" aria-hidden="true">↗</span></button></div></div>
     </aside>
     <section class="conversation" aria-label="Общий чат">
       <header class="chat-header">
         <div class="header-title"><img class="mobile-logo" src="./icon.svg" alt="Маяк" width="36" height="36"><div><h1 class="room-name">Наш круг</h1><p id="connection-status" class="network-status"><i></i> Соединяемся</p></div></div>
         <div class="header-actions"><button id="install-button" class="text-button" type="button" hidden><span aria-hidden="true">↓</span> Установить</button><button id="invite-button" class="invite-button" type="button" hidden><span aria-hidden="true">＋</span><span class="invite-caption"> Пригласить</span></button><button id="more-button" class="icon-button" type="button" aria-label="О чате и настройки">⋯</button></div>
       </header>
-      <div id="offline-banner" class="offline-banner" role="status" hidden>Нет связи с сервером. Ждём подключения телефона.</div>
+      <div id="offline-banner" class="offline-banner" role="status" hidden>Нет связи с облаком. Переписка обновится после подключения.</div>
       <div id="messages-scroll" class="messages-scroll" tabindex="0" aria-label="Сообщения">
         <div class="thread-start"><span>ВАШ МАЛЕНЬКИЙ КРУГ</span><div></div></div>
         <button id="older-button" class="older-button" type="button" hidden>Показать предыдущие сообщения</button>

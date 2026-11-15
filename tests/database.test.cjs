@@ -1,0 +1,36 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {PGlite}=require('@electric-sql/pglite');
+const fs=require('node:fs');
+test('membership, invite isolation, replay protection and message access',async()=>{
+ const db=new PGlite();
+ await db.exec(`create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
+ await db.exec(fs.readFileSync('supabase/migrations/202611160001_cloud.sql','utf8'));
+ const owner='00000000-0000-4000-8000-000000000001',guest='00000000-0000-4000-8000-000000000002',outsider='00000000-0000-4000-8000-000000000003';
+ await db.exec(`insert into auth.users values('${owner}'),('${guest}'),('${outsider}'); insert into mayak_private.invites(token_hash,owner) values(encode(sha256(convert_to('owner-code','UTF8')),'hex'),true);`);
+ async function as(id){await db.exec(`reset role; select set_config('request.jwt.claim.sub','${id}',false); set role authenticated;`)}
+ await as(outsider);
+ assert.equal((await db.query('select * from public.mayak_messages')).rows.length,0);
+ await assert.rejects(db.query("select public.mayak_send('no','nonce')"));
+ await assert.rejects(db.query('select public.mayak_invite()'));
+ await assert.rejects(db.query('select * from mayak_private.invites'));
+ await as(owner);
+ await db.query("select public.mayak_redeem('owner-code','Кэп')");
+ const invite=(await db.query('select public.mayak_invite() as token')).rows[0].token;
+ await db.query("select public.mayak_send('Привет','one')");
+ await db.query("select public.mayak_send('Привет','one')");
+ assert.equal((await db.query('select * from public.mayak_messages')).rows.length,1);
+ await as(guest);
+ await db.query('select public.mayak_redeem($1,$2)',[invite,'Гость']);
+ assert.equal((await db.query('select * from public.mayak_messages')).rows[0].text,'Привет');
+ await db.query("select public.mayak_send('Ответ','two')");
+ await assert.rejects(db.query('update public.mayak_members set owner=true'));
+ await assert.rejects(db.query('select public.mayak_invite()'));
+ await as(outsider);
+ await assert.rejects(db.query('select public.mayak_redeem($1,$2)',[invite,'Чужой']));
+ assert.equal((await db.query('select * from public.mayak_messages')).rows.length,0);
+ await db.exec('reset role; set role anon;');
+ await assert.rejects(db.query('select * from public.mayak_messages'));
+ await assert.rejects(db.query("select public.mayak_redeem('owner-code','Чужой')"));
+ await db.close();
+});
