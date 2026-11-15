@@ -36,3 +36,11 @@
   4. Проверить: после нового сообщения в net._http_response должен быть ответ 200 от функции.
   5. С разрешения владельца слить ветку claude/dazzling-shannon-hqxnxg в main.
 - Хвосты в jqmkjwsptxhovfxngqiy (не используется): тестовые пользователи pushtest-a/b@mayak.invalid, сообщение id=1, неиспользованный код владельца, функция push, секрет в Vault. На работу не влияют.
+
+# Push развёрнут в cfzzxkmctwrclhphqslr — 15 ноября 2026
+
+- Через коннектор Supabase в cfzzxkmctwrclhphqslr: применена миграция `push` (pg_net, колонка pushed, таблица подписок, RPC, триггер mayak_messages_push), приватный VAPID-ключ сохранён в Vault как mayak_vapid_private_key (сверен с публичным ключом из config.js), развёрнута Edge Function `push` v1, verify_jwt=false.
+- Проверено: pg_net установлен, триггер включён, Vault отдаёт ключ, anon не может вызвать mayak_push_claim. Запрос net.http_post на функцию тем же телом, что шлёт триггер (id старого сообщения) → в net._http_response ответ 200 `{"skipped":true}`: база → функция → RPC под service_role работает.
+- НЕ проверено: срабатывание триггера на настоящей вставке и отправка в FCM/APNs — тестовое сообщение в рабочий чат с 2 участниками не отправлялось, подписок устройств пока 0.
+- Ветка claude/dazzling-shannon-hqxnxg слита в main.
+- ОСТАЛОСЬ: включить уведомления на телефонах и отправить сообщение — проверить реальную доставку. Хвосты в jqmkjwsptxhovfxngqiy без изменений.
