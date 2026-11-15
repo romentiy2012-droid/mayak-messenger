@@ -110,6 +110,7 @@
       $('join-button').textContent = 'Создать аккаунт и войти';
     }
     $('invite-field').hidden = !!invitation || $('join-mode').value !== 'register';
+    adjustViewport();
   }
   function showDate(value) {
     const date = new Date(value), now = new Date();
@@ -273,14 +274,25 @@
   }
   function resizeComposer() {const input=$('message-input');input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px';$('send-button').disabled=state.sending||!input.value.trim();}
   // iOS при открытии клавиатуры не сжимает страницу, а сдвигает видимую область:
-  // чат подгоняется под неё по высоте и по сдвигу, иначе над клавиатурой остаётся пустота.
+  // сдвиг сбрасывается, а чат подгоняется под видимую область по высоте и положению,
+  // иначе над клавиатурой остаётся пустота.
   function adjustViewport() {
-    const root=document.documentElement.style, view=window.visualViewport;
-    if(!view || window.innerWidth>760){root.removeProperty('--app-height');root.removeProperty('--app-top');return;}
+    const root=document.documentElement, view=window.visualViewport, chat=!$('chat').hidden;
+    root.classList.toggle('chat-open',chat && window.innerWidth<=760);
+    if(!view || !chat || window.innerWidth>760){root.style.removeProperty('--app-height');root.style.removeProperty('--app-top');return;}
+    if(window.scrollX||window.scrollY||view.offsetTop) window.scrollTo(0,0);
     const scroll=$('messages-scroll'), atBottom=scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<80;
-    root.setProperty('--app-height',view.height+'px');
-    root.setProperty('--app-top',Math.max(0,view.offsetTop)+'px');
+    root.style.setProperty('--app-height',view.height+'px');
+    root.style.setProperty('--app-top',Math.max(0,view.offsetTop)+'px');
     if(atBottom) scrollBottom();
+  }
+  // Клавиатура выезжает около полусекунды, а события iOS приходят не всегда — подстраиваемся каждый кадр.
+  let viewportFollowUntil=0;
+  function followViewport(duration) {
+    const running=viewportFollowUntil>Date.now();
+    viewportFollowUntil=Date.now()+duration;
+    if(running) return;
+    (function step(){adjustViewport();if(Date.now()<viewportFollowUntil) requestAnimationFrame(step);})();
   }
   $('join-form').addEventListener('submit',async event=>{
     event.preventDefault();$('join-error').textContent='';$('join-button').disabled=true;
@@ -327,15 +339,15 @@
   window.addEventListener('offline',()=>connection(false));
   window.addEventListener('resize',adjustViewport);
   if(window.visualViewport){window.visualViewport.addEventListener('resize',adjustViewport);window.visualViewport.addEventListener('scroll',adjustViewport);}
-  $('message-input').addEventListener('focus',()=>{adjustViewport();setTimeout(adjustViewport,120);setTimeout(adjustViewport,400);});
-  $('message-input').addEventListener('blur',()=>setTimeout(adjustViewport,120));
+  $('message-input').addEventListener('focus',()=>followViewport(1500));
+  $('message-input').addEventListener('blur',()=>followViewport(800));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){clearNotifications();poll();}}});
   async function boot() {
     $('invite-field').hidden=!!invitation || $('join-mode').value !== 'register';
     try {const session=await api('session');showChat(session);await poll(true);}
     catch(error) {showJoin();if(error.status===401){try{await api('health');connection(true);}catch(_error){connection(false);}}else{connection(false);$('join-error').textContent=error.message || 'Не удалось подключиться к облаку.';}}
   }
-  if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(()=>{});
   $('join-name').required=true;
   adjustViewport();boot();
   $('join-mode').addEventListener('change',()=>{
