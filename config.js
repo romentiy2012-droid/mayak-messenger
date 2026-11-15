@@ -1,5 +1,5 @@
-// Only public connection settings. NEVER put service_role or sb_secret keys here.
+// Public client settings only. Never add secret or service_role keys.
 window.MAYAK_CONFIG = Object.freeze({
-  supabaseURL: 'https://jqmkjwsptxhovfxngqiy.supabase.co',
-  supabasePublishableKey: 'sb_publishable_TusOHNjTyq4TghCA6ZpTvg_WXLjUoak'
+  supabaseURL: 'https://cfzzxkmctwrclhphqslr.supabase.co',
+  supabasePublishableKey: 'sb_publishable_J-VXJQOJyGlEIRy94LQOiA_fBfF8lIG'
 });
