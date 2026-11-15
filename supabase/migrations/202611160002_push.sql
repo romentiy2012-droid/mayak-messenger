@@ -70,7 +70,7 @@ create function mayak_private.push_notify() returns trigger language plpgsql sec
 begin
  begin
   perform net.http_post(
-   url := 'https://jqmkjwsptxhovfxngqiy.supabase.co/functions/v1/push',
+   url := 'https://cfzzxkmctwrclhphqslr.supabase.co/functions/v1/push',
    body := jsonb_build_object('id', new.id),
    headers := '{"Content-Type":"application/json"}'::jsonb);
  exception when others then null;

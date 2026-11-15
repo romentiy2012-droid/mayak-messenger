@@ -21,8 +21,6 @@ Web Push: приложение подписывает устройство, тр
 2. Развернуть Edge Function `push` из `supabase/functions/push/index.ts` с выключенной проверкой JWT («Verify JWT with legacy secret»).
 3. Приватный VAPID-ключ положить в Vault: `select vault.create_secret('<ключ>','mayak_vapid_private_key');` (или в секрет функции `VAPID_PRIVATE_KEY`). В репозиторий не добавлять.
 
-В проекте `jqmkjwsptxhovfxngqiy` всё это уже сделано.
-
 На устройстве: кнопка «Включить уведомления» в чате или в меню «⋯». iPhone — только из приложения, добавленного на экран Домой (iOS 16.4+). Android — Chrome/Яндекс/Firefox, лучше установленное приложение. Если чат открыт на экране, уведомление не показывается.
 
 Смена VAPID-ключей: новый публичный — в `config.js` и `supabase/functions/push/index.ts`, приватный — в секрет; устройства переподпишутся при следующем открытии.

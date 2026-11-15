@@ -24,3 +24,15 @@
 - В jqmkjwsptxhovfxngqiy: применена миграция push (pg_net, таблица подписок, RPC, триггер), развёрнута Edge Function `push` (verify_jwt=false), приватный VAPID-ключ сохранён в Vault под именем mayak_vapid_private_key (функция берёт его через mayak_push_claim, секрет функции не нужен).
 - Проверено в облаке: тестовое сообщение → триггер → функция ответила 200 `{"sent":0,"removed":1}`, FCM принял запрос и отклонил заведомо несуществующую подписку, она удалена. Доставка на реальный телефон не проверена.
 - ОСТАЛОСЬ: удалить тестовые записи (пользователи pushtest-a/b@mayak.invalid, участники «Тест А/Б», сообщение id=1) — запрос на удаление ждал подтверждения владельца и истёк; выключить Confirm email в Authentication (сейчас включено, регистрация в приложении не пройдёт); выдать код владельца (supabase/owner-invite.sql); слить ветку в main.
+
+# Возврат на cfzzxkmctwrclhphqslr — 15 ноября 2026
+
+- Выяснилось: рабочий проект cfzzxkmctwrclhphqslr (организация «Маяк», вход владельца через GitHub) содержит 2 пользователей, Confirm email там уже выключен. Перенос на jqmkjwsptxhovfxngqiy отменён: config.js и адрес функции в миграции возвращены на cfzzxkmctwrclhphqslr.
+- Владелец переподключил коннектор Supabase к аккаунту «Маяк», но текущая сессия его не видит (коннекторы читаются при старте) — нужна новая сессия.
+- СДЕЛАТЬ В НОВОЙ СЕССИИ (проект cfzzxkmctwrclhphqslr):
+  1. apply_migration: supabase/migrations/202611160002_push.sql без строк begin;/commit;.
+  2. Vault: `select vault.create_secret('<приватный VAPID-ключ>','mayak_vapid_private_key');` — ключ владелец передаёт в чате, в репозиторий не класть. Публичный ключ — в config.js.
+  3. deploy_edge_function: имя push, файл supabase/functions/push/index.ts, verify_jwt=false.
+  4. Проверить: после нового сообщения в net._http_response должен быть ответ 200 от функции.
+  5. С разрешения владельца слить ветку claude/dazzling-shannon-hqxnxg в main.
+- Хвосты в jqmkjwsptxhovfxngqiy (не используется): тестовые пользователи pushtest-a/b@mayak.invalid, сообщение id=1, неиспользованный код владельца, функция push, секрет в Vault. На работу не влияют.
