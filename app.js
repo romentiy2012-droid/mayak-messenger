@@ -57,7 +57,12 @@
     state.messages=[];state.people=[];state.last=0;state.older=false;state.inviteURL='';state.csrf='';
     $('messages').replaceChildren();$('people-list').replaceChildren();
     state.user = null; $('chat').hidden = true; $('welcome').hidden = false;
-    $('invite-field').hidden = !!invitation;
+    if(invitation) {
+      $('join-mode').value = 'register';
+      $('join-password').autocomplete = 'new-password';
+      $('join-button').textContent = 'Создать аккаунт и войти';
+    }
+    $('invite-field').hidden = !!invitation || $('join-mode').value !== 'register';
   }
   function showDate(value) {
     const date = new Date(value), now = new Date();
@@ -218,7 +223,7 @@
     event.preventDefault();$('join-error').textContent='';$('join-button').disabled=true;
     let invite=invitation||$('join-invite').value.trim();
     if(invite.includes('#')) {try {invite=new URLSearchParams(new URL(invite).hash.slice(1)).get('invite')||invite;}catch(_error){}}
-    try {const result=await api('join',{method:'POST',body:JSON.stringify({name:$('join-name').value,email:$('join-email').value,register:$('join-mode').value==='register',password:$('join-password').value,invite})});$('join-password').value='';showChat(result);await poll(true);}
+    try {const result=await api('join',{method:'POST',body:JSON.stringify({name:$('join-name').value,register:$('join-mode').value==='register',password:$('join-password').value,invite})});$('join-password').value='';showChat(result);await poll(true);}
     catch(error){$('join-error').textContent=error.status?error.message:'Облако недоступно. Проверьте интернет и попробуйте ещё раз.';}
     finally{$('join-button').disabled=false;}
   });
@@ -253,23 +258,23 @@
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();state.install=event;$('install-button').hidden=false;});
   window.addEventListener('appinstalled',()=>{$('install-button').hidden=true;toast('Маяк добавлен на главный экран');});
   window.addEventListener('online',()=>{if(state.user){poll();}else boot();});
-  window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1)).get('invite');if(next){invitation=next;if(!state.user)$('invite-field').hidden=true;}});
+  window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1)).get('invite');if(next){invitation=next;if(!state.user)showJoin();}});
   window.addEventListener('offline',()=>connection(false));
   window.addEventListener('resize',adjustViewport);
   if(window.visualViewport)window.visualViewport.addEventListener('resize',adjustViewport);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){poll();}}});
   async function boot() {
-    $('invite-field').hidden=!!invitation;
+    $('invite-field').hidden=!!invitation || $('join-mode').value !== 'register';
     try {const session=await api('session');showChat(session);await poll(true);}
     catch(error) {showJoin();if(error.status===401){try{await api('health');connection(true);}catch(_error){connection(false);}}else{connection(false);$('join-error').textContent=error.message || 'Не удалось подключиться к облаку.';}}
   }
   if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  $('join-name').required=false;
+  $('join-name').required=true;
   adjustViewport();boot();
   $('join-mode').addEventListener('change',()=>{
     const register=$('join-mode').value==='register';
-    $('join-name').required=register;
     $('join-password').autocomplete=register?'new-password':'current-password';
     $('join-button').textContent=register?'Создать аккаунт и войти':'Войти в чат';
+    $('invite-field').hidden = !!invitation || !register;
   });
 })();
