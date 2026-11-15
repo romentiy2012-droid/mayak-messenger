@@ -8,6 +8,8 @@
     streamController:null, lastChunk:0, retryDelay:1000};
   let invitation = new URLSearchParams(location.hash.slice(1)).get('invite') || '';
   let timer = null, toastTimer = null, previousFocus = null;
+  const pushKey = (window.MAYAK_CONFIG || {}).vapidPublicKey || '';
+  const pushFlags = {get(name){try{return localStorage.getItem('mayak.push.'+name)==='1';}catch(_error){return false;}},set(name,value){try{if(value)localStorage.setItem('mayak.push.'+name,'1');else localStorage.removeItem('mayak.push.'+name);}catch(_error){}}};
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -26,6 +28,49 @@
   function toast(text) {
     $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {$('toast').hidden = true;}, 3500);
+  }
+  function pushSupported() {return !!pushKey && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;}
+  function base64Url(buffer) {let raw='';new Uint8Array(buffer).forEach(byte=>{raw+=String.fromCharCode(byte);});return btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+  function pushBanner() {$('push-banner').hidden = !(state.user && pushSupported() && Notification.permission==='default' && !pushFlags.get('off') && !pushFlags.get('later'));}
+  async function pushActive() {
+    if(!pushSupported() || Notification.permission!=='granted' || pushFlags.get('off')) return false;
+    const registration=await navigator.serviceWorker.ready;
+    return !!(await registration.pushManager.getSubscription());
+  }
+  /* Подписывает устройство и сохраняет подписку в облаке. ask=true — только по нажатию пользователя. */
+  async function pushSync(ask) {
+    if(!pushSupported() || !state.user) return false;
+    if(Notification.permission==='default') {if(!ask) return false; await Notification.requestPermission();}
+    if(Notification.permission!=='granted') return false;
+    const registration=await navigator.serviceWorker.ready;
+    let subscription=await registration.pushManager.getSubscription();
+    const current=subscription && subscription.options && subscription.options.applicationServerKey;
+    if(current && base64Url(current)!==pushKey) {await subscription.unsubscribe();subscription=null;}
+    if(!subscription) subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(atob(pushKey.replace(/-/g,'+').replace(/_/g,'/')),char=>char.charCodeAt(0))});
+    const data=subscription.toJSON();
+    await api('push-subscribe',{method:'POST',body:JSON.stringify({endpoint:data.endpoint,p256dh:data.keys.p256dh,auth:data.keys.auth})});
+    return true;
+  }
+  async function pushEnable() {
+    pushFlags.set('off',false);
+    try {
+      const done=await pushSync(true);
+      toast(done?'Уведомления включены':'Уведомления запрещены в настройках браузера или телефона.');
+    } catch(error) {toast('Не удалось включить уведомления: '+(error.message||'ошибка'));}
+    pushBanner();
+  }
+  async function pushDisable(forget) {
+    if(!forget) pushFlags.set('off',true);
+    if(!pushSupported()) return;
+    const registration=await navigator.serviceWorker.getRegistration();
+    const subscription=registration && await registration.pushManager.getSubscription();
+    if(!subscription) return;
+    try {await api('push-unsubscribe',{method:'POST',body:JSON.stringify({endpoint:subscription.endpoint})});} catch(_error) {}
+    await subscription.unsubscribe().catch(()=>{});
+  }
+  function clearNotifications() {
+    if(!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.getRegistration().then(registration=>registration && registration.getNotifications ? registration.getNotifications() : []).then(list=>list.forEach(item=>item.close())).catch(()=>{});
   }
   function connection(online) {
     state.online = online;
@@ -50,13 +95,15 @@
     $('invite-button').hidden = !state.user.owner;
     clearInviteFromAddress();
     adjustViewport();
+    pushBanner();clearNotifications();
+    if(!pushFlags.get('off')) pushSync(false).catch(()=>{});
   }
   function showJoin() {
     generation++; window.MayakCloud.stop();
     clearTimeout(timer);
     state.messages=[];state.people=[];state.last=0;state.older=false;state.inviteURL='';state.csrf='';
     $('messages').replaceChildren();$('people-list').replaceChildren();
-    state.user = null; $('chat').hidden = true; $('welcome').hidden = false;
+    state.user = null; $('chat').hidden = true; $('welcome').hidden = false; $('push-banner').hidden = true;
     if(invitation) {
       $('join-mode').value = 'register';
       $('join-password').autocomplete = 'new-password';
@@ -199,7 +246,7 @@
     list.appendChild(element('li','','Android: откройте меню браузера ⋮ и выберите «Установить приложение» или «Добавить на главный экран».'));
     list.appendChild(element('li','','iPhone: откройте ссылку в Safari, нажмите «Поделиться» → «На экран Домой».'));
     content.appendChild(list);
-    content.appendChild(element('p','about-note','Для переписки нужен интернет. Новые сообщения приходят, когда чат открыт.'));
+    content.appendChild(element('p','about-note','Для переписки нужен интернет. На iPhone уведомления работают только у приложения, добавленного на экран Домой.'));
   }
   function aboutDialog() {
     const content=dialog('Небольшой чат для своих');
@@ -207,10 +254,20 @@
     content.appendChild(button('Установить приложение',installApp));
     content.appendChild(button('Участники и ваше имя',profileDialog));
     if(state.user.owner) content.appendChild(button('Пригласить друзей',inviteDialog));
-    content.appendChild(element('p','about-note','История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. Meizu для работы не нужен. Новые сообщения появляются, пока приложение открыто; фоновых push-уведомлений пока нет.'));
-    content.appendChild(element('p','about-note','Маяк 2.0.0 · облачная версия.'));
+    if(pushSupported()) {
+      const toggle=button('Уведомления…',async()=>{
+        toggle.disabled=true;
+        try {if(await pushActive()){await pushDisable(false);toast('Уведомления отключены на этом устройстве');}else await pushEnable();}
+        catch(error){toast(error.message||'Не удалось изменить уведомления');}
+        closeDialog();
+      });
+      content.appendChild(toggle);
+      pushActive().then(active=>{toggle.textContent=active?'Отключить уведомления':'Включить уведомления';}).catch(()=>{});
+    } else content.appendChild(element('p','about-note',/iP(hone|ad|od)/.test(navigator.userAgent)?'Уведомления на iPhone: откройте чат в Safari, «Поделиться» → «На экран Домой», затем включите их в установленном приложении (нужна iOS 16.4 или новее).':'Этот браузер не поддерживает уведомления.'));
+    content.appendChild(element('p','about-note','История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. Meizu для работы не нужен. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
+    content.appendChild(element('p','about-note','Маяк 2.1.0 · облачная версия.'));
     content.appendChild(button('Выйти на этом устройстве',async()=>{
-      try {await api('logout',{method:'POST',body:'{}'});closeDialog();$('message-input').value='';state.draft=null;showJoin();}
+      try {await pushDisable(true).catch(()=>{});await api('logout',{method:'POST',body:'{}'});closeDialog();$('message-input').value='';state.draft=null;showJoin();}
       catch(error){toast(error.message);}
     }));
   }
@@ -248,6 +305,8 @@
   $('mobile-profile').addEventListener('click',profileDialog);
   $('more-button').addEventListener('click',aboutDialog);
   $('install-button').addEventListener('click',installApp);
+  $('push-enable').addEventListener('click',pushEnable);
+  $('push-dismiss').addEventListener('click',()=>{pushFlags.set('later',true);pushBanner();});
   $('dialog-close').addEventListener('click',closeDialog);
   $('dialog-layer').addEventListener('click',event=>{if(event.target===$('dialog-layer'))closeDialog();});
   document.addEventListener('keydown',event=>{
@@ -262,7 +321,7 @@
   window.addEventListener('offline',()=>connection(false));
   window.addEventListener('resize',adjustViewport);
   if(window.visualViewport)window.visualViewport.addEventListener('resize',adjustViewport);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){poll();}}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title='Маяк — свои на связи';if(state.user){clearNotifications();poll();}}});
   async function boot() {
     $('invite-field').hidden=!!invitation || $('join-mode').value !== 'register';
     try {const session=await api('session');showChat(session);await poll(true);}

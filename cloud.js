@@ -81,6 +81,8 @@
     if(route==='session')return session();
     if(route==='health'){unwrap(await db().from('mayak_messages').select('id').limit(0));return {ok:true};}
     if(route==='logout'){stop();unwrap(await db().auth.signOut({scope:'local'}));storage.set(null);return {};}
+    if(route==='push-subscribe'){await rpc('push_subscribe',{p_endpoint:body.endpoint,p_p256dh:body.p256dh,p_auth:body.auth});return {};}
+    if(route==='push-unsubscribe'){await rpc('push_unsubscribe',{p_endpoint:body.endpoint});return {};}
     if(route==='profile')return {user:await rpc('profile',{p_name:body.name})};
     if(route==='invite'){
       const token=await rpc('invite');const url=new URL(location.pathname,location.origin);url.hash=new URLSearchParams({invite:token}).toString();return {url:url.href};
