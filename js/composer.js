@@ -1,5 +1,5 @@
 // Поле ввода: отправка, ответ и изменение, «печатает», сохранение черновика.
-import {$, state, post, prefs, snippet, toast} from './core.js';
+import {$, state, post, prefs, snippet, toast, MAIN, roomPeer} from './core.js';
 import {messageById, mergeMessages, connection} from './messages.js';
 import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './media.js';
 
@@ -93,13 +93,15 @@ export function cancelContext() {
 function typingSignal() {
   if(!state.user) return;
   if($('message-input').value.trim() && !state.editing) {
-    if(Date.now() - typingSent > 3000) {typingSent = Date.now(); post('typing', {on:true}).catch(() => {});}
-  } else if(typingSent) {typingSent = 0; post('typing', {on:false}).catch(() => {});}
+    if(Date.now() - typingSent > 3000) {typingSent = Date.now(); post('typing', {on:true, peer:roomPeer()}).catch(() => {});}
+  } else if(typingSent) {typingSent = 0; post('typing', {on:false, peer:roomPeer()}).catch(() => {});}
 }
 
-// Черновик хранится на устройстве отдельно для каждого участника и переживает перезапуск приложения.
+// При уходе из чата: там мы больше не печатаем.
+export function stopTyping() {if(typingSent && state.user) {typingSent = 0; post('typing', {on:false, peer:roomPeer()}).catch(() => {});}}
+// Черновик хранится на устройстве отдельно для каждого участника и каждого чата и переживает перезапуск приложения.
 // Вместе с текстом сохраняется номер отправки: если сообщение ушло, а ответ не дошёл, повтор не создаст дубль.
-const draftKey = () => 'draft:' + state.user.id;
+const draftKey = () => 'draft:' + state.user.id + (state.room === MAIN ? '' : ':' + state.room);
 export function saveDraft() {
   clearTimeout(draftTimer);
   if(!state.user || state.editing) return;
@@ -143,7 +145,7 @@ async function submit(event) {
       const item = state.attachment;
       if(!item.nonce) item.nonce = newNonce();
       if(!item.path) {item.path = await window.MayakCloud.upload(item.blob, item.extension); rememberMedia(item.path, item.blob);} // свой файл не скачиваем обратно
-      const result = await post('attach', {kind:item.kind, file:item.path, meta:item.meta, text:item.kind === 'photo' ? text : '', nonce:item.nonce, reply:state.reply || null});
+      const result = await post('attach', {kind:item.kind, file:item.path, meta:item.meta, text:item.kind === 'photo' ? text : '', nonce:item.nonce, reply:state.reply || null, peer:roomPeer()});
       if(item.kind === 'photo') input.value = '';
       state.draft = null; state.reply = null; typingSent = 0;
       clearAttachment(); saveDraft(); renderContext(); mergeMessages([result.message], 'sent');
@@ -151,7 +153,7 @@ async function submit(event) {
       const reply = state.reply || null;
       if(!state.draft || state.draft.text !== text || state.draft.reply !== reply) state.draft = {text, reply, nonce:newNonce()};
       saveDraft();
-      const result = await post('messages', state.draft);
+      const result = await post('messages', {...state.draft, peer:roomPeer()});
       input.value = ''; state.draft = null; state.reply = null; typingSent = 0;
       saveDraft(); renderContext(); mergeMessages([result.message], 'sent');
     }

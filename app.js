@@ -2,7 +2,7 @@
 //   core — состояние и помощники · session — вход и получение сообщений · messages — лента
 //   composer — поле ввода и черновики · actions — меню сообщения и жесты · dialogs — окна
 //   push — уведомления · viewport — высота и клавиатура · sound — сигнал
-import {$, api, post, state, toast} from './js/core.js';
+import {$, api, post, state, toast, MAIN, roomOf} from './js/core.js';
 import {adjustViewport, followViewport} from './js/viewport.js';
 import {unlockAudio} from './js/sound.js';
 import {pushEnable, pushBanner, pushFlags, clearNotifications} from './js/push.js';
@@ -38,8 +38,11 @@ $('reset-cancel').addEventListener('click', () => {
   state.resetToken = ''; history.replaceState(null, '', location.pathname + location.search); $('join-error').textContent = ''; boot();
 });
 $('older-button').addEventListener('click', async () => {
-  if(!state.messages.length) return; $('older-button').disabled = true;
-  try {const result = await api('messages?before=' + state.messages[0].id); state.older = result.has_older; mergeMessages(result.messages, 'older');}
+  // История подгружается для открытого чата: общего либо личного (пара участников).
+  const room = state.room, first = state.messages.find(message => roomOf(message) === room);
+  if(!first) return; $('older-button').disabled = true;
+  const scope = room === MAIN ? '&main=1' : '&a=' + (state.user.id < room ? state.user.id : room) + '&b=' + (state.user.id < room ? room : state.user.id);
+  try {const result = await api('messages?before=' + first.id + scope); state.older[room] = result.has_older; mergeMessages(result.messages, 'older');}
   catch(error) {toast(error.message);} finally {$('older-button').disabled = false;}
 });
 $('push-enable').addEventListener('click', pushEnable);

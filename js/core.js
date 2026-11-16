@@ -5,12 +5,21 @@ export const post = (route, body) => api(route, {method:'POST', body:JSON.string
 export const problem = error => error && error.status ? error.message : 'Нет связи. Попробуйте ещё раз.';
 
 const hash = new URLSearchParams(location.hash.slice(1));
+// Чаты: общий (MAIN) и личные — ключом личного служит id собеседника.
+export const MAIN = 'main';
 export const state = {
-  user:null, messages:[], people:[], rev:0, older:false, online:false,
-  reply:null, editing:null, readUpTo:0, draft:null, attachment:null,
+  user:null, messages:[], people:[], rev:0, online:false,
+  room:MAIN,      // открытый сейчас чат
+  older:{},       // по чатам: есть ли ещё не загруженная история
+  read:{},        // по чатам: до какого сообщения я прочитал
+  reads:[],       // состояние личных чатов из облака: кто до какого сообщения прочитал, кто печатает
+  directFull:false,
+  reply:null, editing:null, draft:null, attachment:null,
   polling:false, again:false, sending:false, inviteURL:'', install:null,
   invitation:hash.get('invite') || '', resetToken:hash.get('reset') || ''
 };
+export function roomOf(message) {return !message.peer_a ? MAIN : message.peer_a === state.user.id ? message.peer_b : message.peer_a;}
+export function roomPeer() {return state.room === MAIN ? null : state.room;}
 export const prefs = {
   get(name, fallback) {try {const value = localStorage.getItem('mayak.' + name); return value === null ? fallback : value;} catch(_error) {return fallback;}},
   set(name, value) {try {if(value === null) localStorage.removeItem('mayak.' + name); else localStorage.setItem('mayak.' + name, value);} catch(_error) {}}

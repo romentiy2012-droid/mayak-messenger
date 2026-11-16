@@ -1,6 +1,6 @@
 {
   "name": "mayak-messenger",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "description": "Маяк — закрытый облачный PWA-чат",
   "main": "app.js",
   "directories": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "esbuild src/supabase-client.js --bundle --format=iife --global-name=MayakSupabase --minify --target=safari15,chrome100 --outfile=vendor/supabase.js",
-    "test": "node --test tests/database.test.cjs tests/push.test.cjs tests/features.test.cjs tests/reliability.test.cjs tests/admin.test.cjs tests/media.test.cjs",
+    "test": "node --test tests/database.test.cjs tests/push.test.cjs tests/features.test.cjs tests/reliability.test.cjs tests/admin.test.cjs tests/media.test.cjs tests/direct.test.cjs",
     "test:ui": "playwright test"
   },
   "repository": {

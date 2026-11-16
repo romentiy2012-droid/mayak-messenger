@@ -1,17 +1,25 @@
 // Действия с сообщением: меню, реакции, удаление, переход к цитате, жесты на телефоне.
-import {$, state, post, problem, toast, button, element, copyText, snippet} from './core.js';
+import {$, state, post, problem, toast, button, element, copyText, snippet, MAIN, roomOf} from './core.js';
 import {messageById, mergeMessages, markRead} from './messages.js';
 import {startReply, startEdit} from './composer.js';
 import {scrollBottom} from './viewport.js';
-import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia} from './media.js';
+import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia, nextSpeed} from './media.js';
 
 const QUICK = ['👍','❤️','😂','😮','😢','🙏'];
+// Остальные смайлы — по кнопке «＋». Любой другой можно ввести с клавиатуры в поле под ними.
+const MORE = ['😀','😁','😅','🤣','😊','😍','😘','🥰','😎','🤔','🙄','😏','😴','🤗','🤝','👏','🙌','💪','👌','✌️','🤞','👀','🔥','💯','✨','🎉','🎂','🌹','💐','☀️','🌙','⭐','💔','💙','💚','🧡','😭','😱','😡','🤯','🥺','😇','🤡','💩','👎','🤦','🤷','🙈','🍻','☕','🍕','🚀','✅','❌','❓','❗'];
+function firstSymbol(text) {
+  const value = (text || '').trim(); if(!value) return '';
+  if(window.Intl && Intl.Segmenter) {const part = new Intl.Segmenter('ru', {granularity:'grapheme'}).segment(value)[Symbol.iterator]().next(); return part.done ? '' : part.value.segment;}
+  return Array.from(value)[0];
+}
 let sheetOpened = 0, press = null, scrollQueued = false;
 
-async function react(id, emoji) {
+// keep=true — поставить выбранный смайл, даже если он уже стоит (иначе повторное нажатие снимает реакцию).
+async function react(id, emoji, keep) {
   const message = messageById(id); if(!message || message.deleted) return;
   const mine = (message.reactions || {})[state.user.id];
-  try {mergeMessages([(await post('react', {id, emoji:mine === emoji ? null : emoji})).message], 'changed');}
+  try {mergeMessages([(await post('react', {id, emoji:mine === emoji && !keep ? null : emoji})).message], 'changed');}
   catch(error) {toast(problem(error));}
 }
 async function removeMessage(id) {
@@ -29,6 +37,24 @@ function jumpTo(id) {
   row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 1400);
 }
 export function closeSheet() {$('sheet-layer').hidden = true; $('sheet').replaceChildren();}
+// Второй экран меню: большой набор смайлов и поле для любого своего.
+function emojiSheet(id) {
+  const message = messageById(id);
+  if(!message || message.deleted) {closeSheet(); return;}
+  const sheet = $('sheet'), mine = (message.reactions || {})[state.user.id];
+  sheet.replaceChildren();
+  const grid = element('div', 'emoji-grid');
+  QUICK.concat(MORE).forEach(emoji => {const item = button(emoji, () => {closeSheet(); react(id, emoji);}, 'sheet-emoji' + (mine === emoji ? ' mine' : '')); item.setAttribute('aria-label', 'Реакция ' + emoji); grid.appendChild(item);});
+  sheet.appendChild(grid);
+  const form = element('form', 'emoji-own');
+  const input = element('input'); input.maxLength = 16; input.placeholder = 'Свой смайл с клавиатуры'; input.setAttribute('aria-label', 'Свой смайл'); input.autocomplete = 'off';
+  const send = element('button', 'emoji-own-send', 'Поставить'); send.type = 'submit';
+  form.appendChild(input); form.appendChild(send);
+  form.addEventListener('submit', event => {event.preventDefault(); const emoji = firstSymbol(input.value); if(!emoji) return; closeSheet(); react(id, emoji, true);});
+  sheet.appendChild(form);
+  sheet.appendChild(button('Отмена', closeSheet, 'sheet-action quiet'));
+  sheetOpened = Date.now();
+}
 function openSheet(id) {
   const message = messageById(id);
   if(!state.user || !message || message.deleted) return;
@@ -36,6 +62,8 @@ function openSheet(id) {
   sheet.replaceChildren();
   const reactions = element('div', 'sheet-reactions');
   QUICK.forEach(emoji => {const item = button(emoji, () => {closeSheet(); react(id, emoji);}, 'sheet-emoji' + (mine === emoji ? ' mine' : '')); item.setAttribute('aria-label', 'Реакция ' + emoji); reactions.appendChild(item);});
+  reactions.appendChild(button('＋', () => emojiSheet(id), 'sheet-emoji sheet-more'));
+  reactions.lastChild.setAttribute('aria-label', 'Другой смайл');
   sheet.appendChild(reactions);
   sheet.appendChild(element('p', 'sheet-preview', message.name + ': ' + snippet(message.text)));
   sheet.appendChild(button('Ответить', () => {closeSheet(); startReply(id);}, 'sheet-action'));
@@ -43,8 +71,8 @@ function openSheet(id) {
   if(plain || (message.file_meta || {}).caption) sheet.appendChild(button('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'sheet-action'));
   const own = message.user_id === state.user.id;
   if(own && plain) sheet.appendChild(button('Изменить', () => {closeSheet(); startEdit(id);}, 'sheet-action'));
-  // Своё сообщение удаляет автор; любое — админ.
-  if(own || state.user.owner) {
+  // Своё сообщение удаляет автор; любое в общем чате — админ. В личных чатах админских прав нет.
+  if(own || (state.user.owner && roomOf(message) === MAIN)) {
     sheet.appendChild(button(own ? 'Удалить' : 'Удалить (админ)', () => {
       sheet.replaceChildren(element('p', 'sheet-question', 'Удалить сообщение у всех?'));
       sheet.appendChild(button('Удалить', () => {closeSheet(); removeMessage(id);}, 'sheet-action danger'));
@@ -66,6 +94,7 @@ export function initActions() {
     const quote = event.target.closest('[data-jump]'); if(quote) {jumpTo(Number(quote.dataset.jump)); return;}
     const chip = event.target.closest('[data-react]'); if(chip) {react(rowId(chip), chip.dataset.react); return;}
     const more = event.target.closest('.message-more'); if(more) {openSheet(rowId(more)); return;}
+    const speed = event.target.closest('.voice-speed'); if(speed) {nextSpeed(); return;}
     const play = event.target.closest('.voice-play'); if(play) {toggleVoice(rowId(play)).catch(error => toast(error.message)); return;}
     const photo = event.target.closest('[data-photo]'); if(photo) openViewer(Number(photo.dataset.photo));
   });

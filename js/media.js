@@ -1,5 +1,6 @@
 // Фото и голосовые: подготовка к отправке, загрузка из хранилища, показ и проигрывание.
-import {$, state, element} from './core.js';
+import {$, state, element, prefs, post} from './core.js';
+import {mergeMessages} from './messages.js';
 
 // ===== Файлы из хранилища =====
 // Файл скачивается один раз и остаётся на устройстве (Cache Storage), чтобы не тянуть его при каждом открытии.
@@ -113,12 +114,24 @@ export async function startRecording() {
     cancel() {try {if(recorder.state !== 'inactive') recorder.stop();} catch(_error) {} release();}
   };
 }
+// Скорость воспроизведения запоминается на устройстве и действует на все голосовые.
+const SPEEDS = [1, 1.5, 2];
+function speed() {const value = Number(prefs.get('voice.speed', '1')); return SPEEDS.includes(value) ? value : 1;}
+const speedLabel = () => String(speed()).replace('.', ',') + '×';
+export function nextSpeed() {
+  prefs.set('voice.speed', String(SPEEDS[(SPEEDS.indexOf(speed()) + 1) % SPEEDS.length]));
+  if(player.audio) player.audio.playbackRate = speed();
+  $('messages').querySelectorAll('.voice-speed').forEach(node => {node.textContent = speedLabel();});
+}
+// Чужое голосовое, которое я ещё не слушал, помечается точкой; после запуска отметка уходит автору («прослушано»).
+const unheard = message => !!state.user && message.user_id !== state.user.id && !(message.heard || []).includes(state.user.id);
 export function voiceNode(message) {
   const meta = message.file_meta || {};
-  const box = element('div', 'message-voice'); box.dataset.voice = message.id;
+  const box = element('div', 'message-voice' + (unheard(message) ? ' unheard' : '')); box.dataset.voice = message.id;
   const play = element('button', 'voice-play', '▶'); play.type = 'button'; play.setAttribute('aria-label', 'Слушать голосовое сообщение');
   const bar = element('div', 'voice-bar'); bar.appendChild(element('i'));
-  box.appendChild(play); box.appendChild(bar); box.appendChild(element('span', 'voice-time', clock(meta.duration)));
+  const rate = element('button', 'voice-speed', speedLabel()); rate.type = 'button'; rate.setAttribute('aria-label', 'Скорость воспроизведения');
+  box.appendChild(play); box.appendChild(bar); box.appendChild(element('span', 'voice-time', clock(meta.duration))); box.appendChild(rate);
   if(player.id === message.id) paint(box);
   mediaURL(message.file).catch(() => {}); // запись маленькая — загружаем заранее, чтобы по нажатию заиграла сразу
   return box;
@@ -165,6 +178,9 @@ export async function toggleVoice(id) {
     // Телефон разрешает звук только прямо в момент нажатия: если файл уже загружен, запускаем без ожидания.
     if(ready.has(message.file)) audio.src = ready.get(message.file);
     else {audio.src = await mediaURL(message.file); if(player.audio !== audio) return;}
+    audio.playbackRate = speed();
     await audio.play();
+    audio.playbackRate = speed(); // некоторые браузеры сбрасывают скорость при запуске
+    if(unheard(message)) post('heard', {id}).then(result => {if(result.message && result.message.id) mergeMessages([result.message], 'changed');}).catch(() => {});
   } catch(error) {if(player.audio === audio) reset(); throw new Error('Не удалось проиграть запись.');}
 }

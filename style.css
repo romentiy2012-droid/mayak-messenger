@@ -276,3 +276,58 @@ html[data-skin=terminal] .record-dot{background-color:var(--t-warn)!important}
 html[data-skin=terminal] .voice-bar{background-color:var(--t-line)!important}
 html[data-skin=terminal] .voice-bar i{background-color:var(--t-fg)!important}
 html[data-skin=terminal] .voice-time,html[data-skin=terminal] .record-hint{color:var(--t-dim)!important}
+
+/* ===== 2.8: личные чаты, «был в сети», смайлы, скорость голосовых ===== */
+.chat-list{display:flex;flex-direction:column;gap:2px}
+.chat-row{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:none;text-align:left;font:inherit;color:inherit}
+button.chat-row:hover{background:#e9efe5}
+.chat-row.current{background:#e1eadd}
+.chat-row .avatar{width:36px;height:36px;font-size:12px;flex-shrink:0;position:relative}
+.chat-row .avatar:after{content:"";position:absolute;right:-2px;bottom:-1px;width:8px;height:8px;border-radius:50%;border:2px solid var(--sidebar);background:#b3bdb0}
+.chat-row.online .avatar:after{background:#5c9a73}
+.chat-row .room-avatar{background:#fff;color:var(--green);font-size:20px;font-weight:300}
+.chat-row .room-avatar:after{display:none}
+.chat-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.chat-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-name small{margin-left:5px;font-size:11px;font-weight:400;color:#94a28f}
+.chat-note{font-size:11px;color:#8a9c86;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-note.typing{color:var(--green)}
+.chat-count,.chats-count{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--green);color:#fff;font-size:11px;font-weight:650;line-height:20px;text-align:center;flex-shrink:0}
+.chats-button{position:relative;display:none;align-items:center;justify-content:center}
+.chats-button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.chats-count{position:absolute;top:-4px;right:-4px}
+@media(max-width:760px){.chats-button{display:flex;min-width:38px;min-height:38px}}
+.dialog-card .chat-list{margin:4px -6px 10px}
+.dialog-card .chat-row{padding:10px 8px}
+.dialog-card .chat-name{font-size:16px}
+.dialog-card .chat-note{font-size:13px}
+.network-status.away i{background:#b3bdb0}
+.person-note{display:block;font-size:11px;font-weight:400;color:#8a9c86}
+.dialog-card .person{flex-wrap:wrap}
+.heard-mark{margin:0 5px}
+.voice-speed{flex-shrink:0;min-width:38px;min-height:26px;padding:2px 6px;border:1px solid #cfdccf;border-radius:13px;background:none;font-size:11px;font-weight:650;color:#6f8a76;font-variant-numeric:tabular-nums}
+.message-voice{width:min(270px,66vw)}
+.message-voice.unheard .voice-play{box-shadow:0 0 0 3px #f0b35a}
+.sheet-more{color:var(--green);font-weight:300}
+.emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-height:40vh;overflow:auto;margin-bottom:10px}
+.emoji-grid .sheet-emoji{min-height:42px;font-size:22px;padding:0}
+.emoji-own{display:flex;gap:8px;margin-bottom:6px}
+.emoji-own input{flex:1;min-width:0;height:44px}
+.emoji-own-send{flex-shrink:0;border:0;border-radius:9px;background:var(--green);color:#fff;padding:0 14px;font-size:14px;font-weight:600}
+html[data-theme=dark] button.chat-row:hover{background:#1c2823}
+html[data-theme=dark] .chat-row.current{background:#1f2e27}
+html[data-theme=dark] .chat-row .room-avatar{background:#131a17;color:#5cc2a6}
+html[data-theme=dark] .chat-row .avatar:after{border-color:#141c18}
+html[data-theme=dark] .chat-note,html[data-theme=dark] .person-note,html[data-theme=dark] .chat-name small{color:#8c9c93}
+html[data-theme=dark] .chat-note.typing{color:#5cc2a6}
+html[data-theme=dark] .voice-speed{border-color:#33453c;color:#8fbfa9}
+html[data-skin=terminal] .chat-row{border:1px solid transparent!important}
+html[data-skin=terminal] .chat-row.current{border-color:var(--t-fg)!important;background-color:var(--t-fill)!important}
+html[data-skin=terminal] .chat-note,html[data-skin=terminal] .person-note,html[data-skin=terminal] .chat-name small{color:var(--t-dim)!important}
+html[data-skin=terminal] .chat-note.typing{color:var(--t-hot)!important}
+html[data-skin=terminal] .chat-count,html[data-skin=terminal] .chats-count,html[data-skin=terminal] .emoji-own-send{background-color:var(--t-fg)!important;color:var(--t-bg)!important;text-shadow:none}
+html[data-skin=terminal] .chat-row .avatar:after{background:var(--t-line)}
+html[data-skin=terminal] .chat-row.online .avatar:after{background:var(--t-fg)}
+html[data-skin=terminal] .voice-speed{border:1px solid var(--t-line)!important;text-transform:none}
+html[data-skin=terminal] .message-voice.unheard .voice-play{outline:2px solid var(--t-warn);outline-offset:2px}
+html[data-skin=terminal] .network-status.away i{background-color:var(--t-line)!important}

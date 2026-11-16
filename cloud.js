@@ -68,17 +68,29 @@
     storage.set(null);
     return {user:member,room:'Наш круг',csrf:''};
   }
-  const COLUMNS='id,user_id,name,text,nonce,created,reply_to,edited,deleted,reactions,rev,kind,file,file_meta';
-  // before — страница старых сообщений; rev — всё новое и изменённое после этой отметки; иначе — последние сообщения.
+  const COLUMNS='id,user_id,name,text,nonce,created,reply_to,edited,deleted,reactions,rev,kind,file,file_meta,peer_a,peer_b,heard';
+  // Три вида запроса:
+  //   rev=N — всё новое и изменённое после отметки (по всем чатам сразу);
+  //   before=ID и чат (main=1 либо a,b — пара участников личного чата) — страница истории одного чата;
+  //   без параметров — первая загрузка: последние сообщения общего чата и последние личные.
+  const page=rows=>({messages:rows.slice(0,100).reverse(),full:rows.length>100});
+  const recent=query=>query.order('id',{ascending:false}).limit(101);
   async function messages(params) {
-    const q=db().from('mayak_messages').select(COLUMNS);
+    const table=()=>db().from('mayak_messages').select(COLUMNS);
     const before=Number(params.get('before')||0),rev=Number(params.get('rev')||0);
     if(rev&&!before){
-      const rows=unwrap(await q.gt('rev',rev).order('rev',{ascending:true}).limit(101));
+      const rows=unwrap(await table().gt('rev',rev).order('rev',{ascending:true}).limit(101));
       return {messages:rows.slice(0,100),has_older:false,has_more:rows.length>100};
     }
-    const rows=unwrap(await (before?q.lt('id',before):q).order('id',{ascending:false}).limit(101));
-    return {messages:rows.slice(0,100).reverse(),has_older:rows.length>100,has_more:false};
+    if(before){
+      const a=params.get('a'),b=params.get('b');
+      const scoped=a&&b?table().eq('peer_a',a).eq('peer_b',b):table().is('peer_a',null);
+      const result=page(unwrap(await recent(scoped.lt('id',before))));
+      return {messages:result.messages,has_older:result.full,has_more:false};
+    }
+    const [main,direct]=await Promise.all([recent(table().is('peer_a',null)),recent(table().not('peer_a','is',null))]);
+    const common=page(unwrap(main)),personal=page(unwrap(direct));
+    return {messages:common.messages.concat(personal.messages).sort((x,y)=>x.id-y.id),has_older:common.full,direct_full:personal.full,has_more:false};
   }
   function person(row){return {...row,online:Date.now()-Date.parse(row.last_seen)<90000};}
   async function api(path,options={}) {
@@ -116,24 +128,27 @@
     if(route==='invite'){
       const token=await rpc('invite');const url=new URL(location.pathname,location.origin);url.hash=new URLSearchParams({invite:token}).toString();return {url:url.href};
     }
-    if(route==='messages' && options.method==='POST')return {message:await rpc('post',{p_text:body.text,p_nonce:body.nonce,p_reply:body.reply||null})};
-    if(route==='attach')return {message:await rpc('attach',{p_kind:body.kind,p_file:body.file,p_meta:body.meta||{},p_text:body.text||'',p_nonce:body.nonce,p_reply:body.reply||null})};
+    if(route==='messages' && options.method==='POST')return {message:await rpc('post_to',{p_peer:body.peer||null,p_text:body.text,p_nonce:body.nonce,p_reply:body.reply||null})};
+    if(route==='attach')return {message:await rpc('attach_to',{p_peer:body.peer||null,p_kind:body.kind,p_file:body.file,p_meta:body.meta||{},p_text:body.text||'',p_nonce:body.nonce,p_reply:body.reply||null})};
     if(route==='edit')return {message:await rpc('edit',{p_id:body.id,p_text:body.text})};
     if(route==='delete')return {message:await rpc('delete',{p_id:body.id})};
     if(route==='react')return {message:await rpc('react',{p_id:body.id,p_emoji:body.emoji||null})};
     if(route==='kick'){await rpc('kick',{p_user:body.id});return {};}
-    if(route==='read'){await rpc('read',{p_id:body.id});return {};}
-    if(route==='typing'){await rpc('typing',{p_on:!!body.on});return {};}
+    if(route==='read'){await rpc('read_to',{p_peer:body.peer||null,p_id:body.id});return {};}
+    if(route==='typing'){await rpc('typing_to',{p_peer:body.peer||null,p_on:!!body.on});return {};}
+    if(route==='heard')return {message:await rpc('heard',{p_id:body.id})};
     if(route==='messages')return messages(params);
     if(route==='events'){
       if(Date.now()-lastHeartbeat>25000){await rpc('profile');lastHeartbeat=Date.now();}
       const result=await messages(params);
       const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing'));
-      return {...result,people:people.map(person)};
+      const reads=unwrap(await db().from('mayak_reads').select('user_id,peer,last_read,typing'));
+      return {...result,people:people.map(person),reads};
     }
     throw fail('Неизвестный запрос.');
   }
-  // callback('message',строка) — новое или изменённое сообщение; callback('member',участник) — «прочитано», «печатает», имя.
+  // callback('message',строка) — новое или изменённое сообщение; callback('member',участник) — «прочитано», «печатает», имя;
+  // callback('read',строка) — то же для личного чата.
   function watch(callback){
     pendingCallback=callback;if(channel)return;
     channel=db().channel('mayak-messages')
@@ -142,6 +157,7 @@
         if(payload.eventType==='DELETE')pendingCallback?.('ready'); // участника удалили — обновить список
         else if(payload.new&&payload.new.id)pendingCallback?.('member',person(payload.new));
       })
+      .on('postgres_changes',{event:'*',schema:'public',table:'mayak_reads'},payload=>{if(payload.new&&payload.new.user_id)pendingCallback?.('read',payload.new);})
       .subscribe(status=>{if(status==='SUBSCRIBED')pendingCallback?.('ready');});
   }
   // Файлы вложений: закрытый бакет, у каждого участника своя папка.

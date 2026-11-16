@@ -1,8 +1,8 @@
 // Вход и выход, экран входа, получение сообщений из облака.
-import {$, api, state, prefs, initials, palette} from './core.js';
+import {$, api, state, prefs, initials, palette, MAIN} from './core.js';
 import {pushBanner, pushSync, pushFlags, clearNotifications} from './push.js';
 import {adjustViewport} from './viewport.js';
-import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, clearTyping, resetList} from './messages.js';
+import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, readsLoaded, readChanged, setMainName, clearTyping, resetList} from './messages.js';
 import {restoreDraft, resetComposer} from './composer.js';
 import {closeSheet} from './actions.js';
 import {stopVoice, closeViewer} from './media.js';
@@ -11,13 +11,16 @@ let generation = 0, timer = null;
 
 function clearAddress() {if(location.hash) history.replaceState(null, '', location.pathname + location.search);}
 export function showChat(session) {
-  state.user = session.user; state.readUpTo = Number(session.user.last_read) || 0;
+  state.user = session.user; state.room = MAIN; state.older = {}; state.reads = []; state.directFull = false;
+  state.read = {[MAIN]:Number(session.user.last_read) || 0};
   state.invitation = ''; state.resetToken = ''; clearAddress();
   // Оформление «терминал» — только у владельца; у остальных всегда обычное.
   prefs.set('owner', state.user.owner ? '1' : null);
   if(window.MayakTheme) window.MayakTheme.apply();
   $('welcome').hidden = true; $('chat').hidden = false;
+  setMainName(session.room);
   document.querySelectorAll('.room-name').forEach(node => {node.textContent = session.room || 'Наш круг';});
+  $('chat').classList.remove('direct');
   $('my-name').textContent = state.user.name;
   [$('my-avatar'), $('mobile-avatar')].forEach(node => {node.textContent = initials(state.user.name); node.className = 'avatar ' + palette(state.user.id);});
   $('invite-button').hidden = !state.user.owner;
@@ -45,7 +48,7 @@ export function showJoin(forget) {
   generation++; window.MayakCloud.stop();
   clearTimeout(timer);
   resetComposer(forget);
-  state.messages = []; state.people = []; state.rev = 0; state.older = false; state.inviteURL = ''; state.readUpTo = 0;
+  state.messages = []; state.people = []; state.rev = 0; state.older = {}; state.read = {}; state.reads = []; state.room = MAIN; state.inviteURL = '';
   clearTyping(); stopVoice(); closeViewer(); resetList(); closeSheet();
   $('people-list').replaceChildren(); $('jump-button').hidden = true;
   try {if(navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});} catch(_error) {}
@@ -63,16 +66,18 @@ export async function poll(initial = false) {
     const result = await api('events?rev=' + state.rev);
     if(current !== generation || !state.user) return;
     const first = !state.rev;
-    if(first) state.older = result.has_older;
+    if(first) {state.older[MAIN] = result.has_older; state.directFull = !!result.direct_full;}
     const before = state.people;
     state.people = result.people;
+    const directRead = readsLoaded(result.reads);
     mergeMessages(result.messages, initial || first ? 'initial' : 'new');
-    if(!result.messages.length && before.some(person => {const now = state.people.find(item => item.id === person.id); return now && Number(now.last_read) !== Number(person.last_read);})) renderMessages('changed');
+    if(!result.messages.length && (directRead || before.some(person => {const now = state.people.find(item => item.id === person.id); return now && Number(now.last_read) !== Number(person.last_read);}))) renderMessages('changed');
     renderPeople(); connection(true);
     more = result.has_more;
     window.MayakCloud.watch((kind, row) => {
       if(!state.user) return;
       if(kind === 'member') memberChanged(row);
+      else if(kind === 'read') readChanged(row);
       else if(kind !== 'message' || (row.rev || 0) > state.rev) poll();
     });
   } catch(error) {

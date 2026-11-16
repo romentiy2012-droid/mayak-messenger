@@ -3,6 +3,7 @@ import {$, api, post, state, prefs, element, button, avatar, adminTag, initials,
 import {pushSupported, pushActive, pushEnable, pushDisable} from './push.js';
 import {unlockAudio, ping} from './sound.js';
 import {poll, showJoin} from './session.js';
+import {chatList, openRoom, lastSeen} from './messages.js';
 
 let previousFocus = null;
 function dialog(title) {
@@ -33,6 +34,14 @@ async function resetDialog(person) {
     shareLink(content, url, 'Скопировать ссылку', {title:'Маяк — новый пароль', text:'Ссылка, чтобы задать новый пароль в Маяке'});
   } catch(error) {content.appendChild(element('p', 'form-error', problem(error)));}
 }
+// Список чатов на телефоне (на широком экране он всегда слева).
+function chatsDialog() {
+  const content = dialog('Чаты');
+  const list = element('div', 'chat-list');
+  list.appendChild(chatList(room => {closeDialog(); openRoom(room);}));
+  content.appendChild(list);
+  content.appendChild(element('p', 'about-note', 'Общий чат видят все участники. Личный чат с человеком видите только вы двое.'));
+}
 function kickDialog(person) {
   const content = dialog('Удалить участника?');
   content.appendChild(element('p', '', '«' + person.name + '» сразу потеряет доступ к чату и перестанет получать уведомления. Его сообщения останутся в истории. Вернуть участника можно новым приглашением.'));
@@ -53,6 +62,7 @@ function profileDialog() {
   state.people.forEach(person => {
     const row = element('div', 'person' + (person.online ? ' online' : '')); row.appendChild(avatar(person));
     const name = element('span', 'person-name', person.name + (person.id === state.user.id ? ' · вы' : '')); if(person.owner) name.appendChild(adminTag());
+    name.appendChild(element('span', 'person-note', lastSeen(person)));
     row.appendChild(name);
     if(state.user.owner && person.id !== state.user.id) {
       row.appendChild(button('Пароль', () => resetDialog(person), 'person-action'));
@@ -92,6 +102,7 @@ async function installApp() {
 function aboutDialog() {
   const content = dialog('Небольшой чат для своих');
   content.appendChild(element('p', '', '«Маяк» работает в облаке. Здесь одна общая переписка, а первый вход — по приглашению.'));
+  content.appendChild(button('Чаты', chatsDialog));
   content.appendChild(button('Установить приложение', installApp));
   content.appendChild(button(state.user.owner ? 'Участники, имя и пароли' : 'Участники и ваше имя', profileDialog));
   if(state.user.owner) content.appendChild(button('Пригласить друзей', inviteDialog));
@@ -121,10 +132,10 @@ function aboutDialog() {
   }
   const sound = button('', () => {const on = prefs.get('sound','1') !== '1'; prefs.set('sound', on ? '1' : '0'); sound.textContent = 'Звук сообщений: ' + (on ? 'включён' : 'выключен'); if(on) {unlockAudio(); ping();}});
   sound.textContent = 'Звук сообщений: ' + (prefs.get('sound','1') === '1' ? 'включён' : 'выключен'); content.appendChild(sound);
-  content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение и участника.' : '')));
+  content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.7.0 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.8.0 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
@@ -136,6 +147,7 @@ export function initDialogs() {
   $('profile-button').addEventListener('click', profileDialog);
   $('mobile-profile').addEventListener('click', profileDialog);
   $('more-button').addEventListener('click', aboutDialog);
+  $('chats-button').addEventListener('click', chatsDialog);
   $('install-button').addEventListener('click', installApp);
   $('dialog-close').addEventListener('click', closeDialog);
   $('dialog-layer').addEventListener('click', event => {if(event.target === $('dialog-layer')) closeDialog();});
