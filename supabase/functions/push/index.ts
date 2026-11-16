@@ -1,6 +1,6 @@
 // Edge Function `push`: рассылает Web Push о новом сообщении «Маяка».
 // Вызывается триггером базы с телом {"id": <номер сообщения>}. Проверка JWT для функции должна быть выключена:
-// защита — в mayak_push_claim (сообщение выдаётся один раз и только свежее).
+// защита — в mayak_push_claim (сообщение выдаётся только свежее и не чаще раза в 20 секунд).
 // Приватный VAPID-ключ: секрет функции VAPID_PRIVATE_KEY или Supabase Vault (mayak_vapid_private_key).
 // Без зависимостей — только WebCrypto.
 
@@ -60,20 +60,23 @@ async function encryptPayload(subscription, plaintext) {
   return concat(salt, Uint8Array.of(0, 0, 16, 0), Uint8Array.of(serverPublic.length), serverPublic, sealed);
 }
 
-async function sendPush(subscription, payload, privateKey) {
-  const body = await encryptPayload(subscription, encoder.encode(JSON.stringify(payload)));
+// Шифрование и подпись делаются один раз; при повторе уходит тот же запрос.
+async function preparePush(subscription, payload, privateKey) {
+  const publicKey = (typeof Deno !== 'undefined' && Deno.env.get('VAPID_PUBLIC_KEY')) || VAPID_PUBLIC_KEY;
+  return {
+    body: await encryptPayload(subscription, encoder.encode(JSON.stringify(payload))),
+    headers: {
+      Authorization: await vapidAuthorization(subscription.endpoint, privateKey, publicKey),
+      'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream',
+      TTL: '86400', Urgency: 'high',
+    },
+  };
+}
+async function postPush(endpoint, prepared) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(subscription.endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: await vapidAuthorization(subscription.endpoint, privateKey),
-        'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream',
-        TTL: '86400', Urgency: 'high',
-      },
-      body, signal: controller.signal,
-    });
+    const response = await fetch(endpoint, { method: 'POST', headers: prepared.headers, body: prepared.body, signal: controller.signal });
     await response.body?.cancel();
     return response.status;
   } finally { clearTimeout(timeout); }
@@ -91,26 +94,47 @@ async function database(name, args) {
   return text ? JSON.parse(text) : null;
 }
 
-async function deliver(id) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Итог по одной подписке: sent — доставлено; gone — подписки больше нет; retry — временный сбой
+// (сеть, 429, 5xx), повторить позже; failed — push-сервис отказал окончательно.
+async function deliverOne(subscription, payload, privateKey, pauses = [400, 1200]) {
+  let prepared;
+  // Ошибка ключа или подписки повтором не лечится.
+  try { prepared = await preparePush(subscription, payload, privateKey); }
+  catch (error) { return 'failed ' + String(error && error.message || error).slice(0, 80); }
+  for (let attempt = 0; ; attempt++) {
+    let status = 0;
+    try { status = await postPush(subscription.endpoint, prepared); } catch (_error) { status = 0; }
+    if (status >= 200 && status < 300) return 'sent';
+    if (status === 404 || status === 410) return 'gone';
+    const temporary = status === 0 || status === 408 || status === 429 || status >= 500;
+    if (!temporary) return 'failed ' + status;
+    if (attempt >= pauses.length) return 'retry ' + status;
+    await wait(pauses[attempt]);
+  }
+}
+
+async function deliver(id, pauses) {
   const job = await database('mayak_push_claim', { p_id: id });
   if (!job) return { skipped: true };
   const privateKey = Deno.env.get('VAPID_PRIVATE_KEY') || job.vapid;
   if (!privateKey) throw new Error('Не задан приватный VAPID-ключ.');
   const payload = { id: job.id, title: job.title, body: job.body };
-  const gone = [], failed = [];
+  const gone = [], retry = [], failed = [];
   let sent = 0;
   await Promise.all(job.subscriptions.map(async (subscription) => {
-    try {
-      // badge — число непрочитанных именно этого получателя, для значка на иконке.
-      const status = await sendPush(subscription, { ...payload, badge: subscription.badge || 0 }, privateKey);
-      if (status >= 200 && status < 300) sent++;
-      else if (status === 404 || status === 410) gone.push(subscription.endpoint);
-      else failed.push(new URL(subscription.endpoint).hostname + ' ' + status);
-    } catch (error) { failed.push(String(error && error.message || error).slice(0, 120)); }
+    // badge — число непрочитанных именно этого получателя, для значка на иконке.
+    const outcome = await deliverOne(subscription, { ...payload, badge: subscription.badge || 0 }, privateKey, pauses);
+    if (outcome === 'sent') sent++;
+    else if (outcome === 'gone') gone.push(subscription.endpoint);
+    else if (outcome.startsWith('retry')) retry.push(subscription.endpoint);
+    else failed.push(new URL(subscription.endpoint).hostname + ' ' + outcome);
   }));
-  if (gone.length) await database('mayak_push_drop', { p_endpoints: gone });
+  // Сообщение считается отправленным, только когда не осталось временно не принявших подписок:
+  // оставшиеся база повторит по расписанию.
+  await database('mayak_push_result', { p_id: id, p_failed: retry, p_gone: gone });
   if (failed.length) console.error('push failed', failed);
-  return { sent, removed: gone.length, failed };
+  return { sent, removed: gone.length, retry: retry.length, failed };
 }
 
 async function handler(request) {
@@ -127,4 +151,4 @@ async function handler(request) {
 
 if (typeof Deno !== 'undefined') Deno.serve(handler);
 
-export { encryptPayload, vapidAuthorization, VAPID_PUBLIC_KEY };
+export { encryptPayload, vapidAuthorization, deliver, VAPID_PUBLIC_KEY };

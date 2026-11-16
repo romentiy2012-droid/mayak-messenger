@@ -18,7 +18,7 @@
   <script src="./config.js" defer></script>
   <script src="./vendor/supabase.js" defer></script>
   <script src="./cloud.js" defer></script>
-  <script src="./app.js" defer></script>
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
   <main id="welcome" class="welcome">
@@ -30,13 +30,17 @@
         <h1 id="welcome-title">Свои<br> на связи<span>.</span></h1>
         <p class="welcome-description">Один общий чат. Знакомые имена.<br>И ничего лишнего между вами.</p>
         <form id="join-form">
-          <label for="join-mode">Вход или регистрация</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
-          <label for="join-name">Ваше имя</label>
-          <input id="join-name" name="name" autocomplete="username" maxlength="32" placeholder="Ваше имя" required>
-          <label for="join-password">Пароль</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required><p class="password-note">Для первого входа выберите «Регистрация». Старые пароли с Meizu сюда не перенесены.</p>
+          <p id="reset-note" class="reset-note" hidden>Придумайте новый пароль. Ссылка владельца одноразовая и действует сутки.</p>
+          <div id="join-identity">
+            <label for="join-mode">Вход или регистрация</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
+            <label for="join-name">Ваше имя</label>
+            <input id="join-name" name="name" autocomplete="username" maxlength="80" placeholder="Имя, с которым регистрировались" required>
+          </div>
+          <label id="password-label" for="join-password">Пароль</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required><p id="password-note" class="password-note">Для первого входа выберите «Регистрация». Забыли пароль — попросите владельца чата прислать ссылку для сброса.</p>
           <div id="invite-field" hidden><label for="join-invite">Приглашение для первого входа</label><input id="join-invite" name="invite" autocomplete="off" placeholder="Код из ссылки владельца"></div>
           <p id="join-error" class="form-error" role="alert"></p>
           <button id="join-button" class="primary-button" type="submit">Войти в чат <span aria-hidden="true">↗</span></button>
+          <button id="reset-cancel" class="link-button" type="button" hidden>Войти обычным способом</button>
         </form>
         <p class="join-note"><span class="tiny-lock" aria-hidden="true">↳</span> Вход по приглашению. Имя видно участникам.</p>
       </section>
@@ -66,7 +70,7 @@
         <div id="empty-chat" class="empty-chat"><div class="empty-icon" aria-hidden="true"><img src="./icon.svg" width="58" height="58" alt=""></div><h2>Первое сообщение — за вами</h2><p>Поздоровайтесь с друзьями.<br>С этого начнётся ваша переписка.</p></div>
         <div id="messages" class="messages"></div>
       </div>
-      <div class="composer-area"><button id="jump-button" class="jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></button><p id="send-error" class="send-error" role="alert" hidden></p><div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" type="button" aria-label="Отменить">×</button></div><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Участники и ваше имя"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.2.0</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
+      <div class="composer-area"><button id="jump-button" class="jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></button><p id="send-error" class="send-error" role="alert" hidden></p><div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" type="button" aria-label="Отменить">×</button></div><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Участники и ваше имя"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.3.0</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
     </section>
   </main>
 

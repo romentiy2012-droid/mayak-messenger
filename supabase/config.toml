@@ -1,3 +1,7 @@
 # Функцию вызывает триггер базы без JWT; защита — в mayak_push_claim.
 [functions.push]
 verify_jwt = false
+
+# Участник ещё не вошёл; защита — одноразовый код из ссылки владельца.
+[functions.reset]
+verify_jwt = false

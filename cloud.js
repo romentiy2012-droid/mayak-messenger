@@ -14,6 +14,20 @@
     const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
     return 'u_' + hex + '@mayak.app';
   }
+  // Обратно: технический адрес → имя, с которым участник регистрировался (им он и входит).
+  function emailToName(email) {
+    const match = /^u_((?:[0-9a-f]{2})+)@mayak\.app$/.exec(email || '');
+    if(!match) return email || '';
+    try {return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(match[1].match(/../g), pair => parseInt(pair,16)));}
+    catch {return email;}
+  }
+  // Запрос мимо клиента Supabase (служебные функции, проверка связи) с ограничением по времени.
+  async function plain(path,options={}) {
+    db();
+    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
+    try{return await fetch(new URL(path,config.supabaseURL),{...options,signal:controller.signal});}
+    finally{clearTimeout(timeout);}
+  }
   function db() {
     if(client) return client;
     if(!config.supabaseURL || !config.supabasePublishableKey) throw fail('Облачный чат ещё настраивается. Владелец должен подключить Supabase.',503);
@@ -81,7 +95,18 @@
       return session();
     }
     if(route==='session')return session();
-    if(route==='health'){unwrap(await db().from('mayak_messages').select('id').limit(0));return {ok:true};}
+    // Любой ответ сервера означает, что облако на связи (таблицы невошедшему недоступны, поэтому их не трогаем).
+    if(route==='health'){await plain('/auth/v1/health',{headers:{apikey:config.supabasePublishableKey}});return {ok:true};}
+    if(route==='reset'){
+      const response=await plain('/functions/v1/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:body.token,password:body.password})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||!data.email) throw fail(data.error||'Не удалось сменить пароль. Попробуйте ещё раз позже.',response.ok?500:response.status);
+      unwrap(await db().auth.signInWithPassword({email:data.email,password:body.password}));
+      return {...await session(),login:emailToName(data.email)};
+    }
+    if(route==='reset-link'){
+      const token=await rpc('reset_issue',{p_user:body.id});const url=new URL(location.pathname,location.origin);url.hash=new URLSearchParams({reset:token}).toString();return {url:url.href};
+    }
     if(route==='logout'){stop();unwrap(await db().auth.signOut({scope:'local'}));storage.set(null);return {};}
     if(route==='push-subscribe'){await rpc('push_subscribe',{p_endpoint:body.endpoint,p_p256dh:body.p256dh,p_auth:body.auth});return {};}
     if(route==='push-unsubscribe'){await rpc('push_unsubscribe',{p_endpoint:body.endpoint});return {};}
