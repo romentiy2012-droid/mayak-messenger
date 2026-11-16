@@ -118,6 +118,7 @@
     if(route==='edit')return {message:await rpc('edit',{p_id:body.id,p_text:body.text})};
     if(route==='delete')return {message:await rpc('delete',{p_id:body.id})};
     if(route==='react')return {message:await rpc('react',{p_id:body.id,p_emoji:body.emoji||null})};
+    if(route==='kick'){await rpc('kick',{p_user:body.id});return {};}
     if(route==='read'){await rpc('read',{p_id:body.id});return {};}
     if(route==='typing'){await rpc('typing',{p_on:!!body.on});return {};}
     if(route==='messages')return messages(params);
@@ -134,7 +135,10 @@
     pendingCallback=callback;if(channel)return;
     channel=db().channel('mayak-messages')
       .on('postgres_changes',{event:'*',schema:'public',table:'mayak_messages'},payload=>{if(payload.new&&payload.new.id)pendingCallback?.('message',payload.new);})
-      .on('postgres_changes',{event:'*',schema:'public',table:'mayak_members'},payload=>{if(payload.new&&payload.new.id)pendingCallback?.('member',person(payload.new));})
+      .on('postgres_changes',{event:'*',schema:'public',table:'mayak_members'},payload=>{
+        if(payload.eventType==='DELETE')pendingCallback?.('ready'); // участника удалили — обновить список
+        else if(payload.new&&payload.new.id)pendingCallback?.('member',person(payload.new));
+      })
       .subscribe(status=>{if(status==='SUBSCRIBED')pendingCallback?.('ready');});
   }
   function stop(){pendingCallback=null;if(channel){db().removeChannel(channel).catch(()=>{});channel=null;}lastHeartbeat=0;}

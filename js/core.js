@@ -29,9 +29,12 @@ export function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0,2).map(word => Array.from(word)[0]).join('').toUpperCase();
 }
 export function palette(id) {
+  id = String(id || ''); // у сообщений удалённого участника автора нет
   let value = 0; for(let i = 0; i < id.length; i++) value = (value + id.charCodeAt(i)) % 6;
   return 'palette-' + value;
 }
+// Маленькая пометка «админ» рядом с именем владельца чата.
+export function adminTag() {return element('small', 'role-tag', 'админ');}
 export function avatar(user) {return element('span', 'avatar ' + palette(user.id), initials(user.name));}
 export function snippet(text) {const line = text.replace(/\s+/g, ' ').trim(); return line.length > 90 ? line.slice(0,90) + '…' : line;}
 

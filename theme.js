@@ -1,4 +1,4 @@
-/* Оформление: «терминал» (зелёный экран) или обычное; у обычного — тема «как в телефоне», светлая или тёмная.
+/* Оформление: «терминал» (зелёный экран) — только на устройстве владельца чата — или обычное; у обычного — тема «как в телефоне», светлая или тёмная.
    Подключается до стилей, чтобы экран не мигал. */
 (() => {
   'use strict';
@@ -8,8 +8,9 @@
     catch(_error) {return 'auto';}
   }
   function skin() {
-    try {return localStorage.getItem('mayak.skin') === 'classic' ? 'classic' : 'terminal';}
-    catch(_error) {return 'terminal';}
+    // Терминал доступен только владельцу: отметку mayak.owner ставит приложение после входа.
+    try {return localStorage.getItem('mayak.owner') === '1' && localStorage.getItem('mayak.skin') !== 'classic' ? 'terminal' : 'classic';}
+    catch(_error) {return 'classic';}
   }
   function apply() {
     // Терминал всегда тёмный: он строится поверх тёмной темы.

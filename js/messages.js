@@ -1,5 +1,5 @@
 // Лента сообщений, список участников, «прочитано», «печатает» и счётчик непрочитанных.
-import {$, state, post, element, avatar, snippet} from './core.js';
+import {$, state, post, element, avatar, adminTag, snippet} from './core.js';
 import {scrollBottom, nearBottom} from './viewport.js';
 import {ping} from './sound.js';
 import {renderContext} from './composer.js';
@@ -52,12 +52,14 @@ function textWithLinks(node, text) {
 // Остальные остаются на месте, поэтому жест или выделение на них не прерывается.
 const rows = new Map(), dividers = new Map();
 export function resetList() {rows.clear(); dividers.clear(); $('messages').replaceChildren();}
-function buildRow(message, source, read) {
+function isOwner(id) {return !!id && state.people.some(person => person.id === id && person.owner);}
+function buildRow(message, source, read, admin) {
   const own = message.user_id === state.user.id, gone = !!message.deleted;
   const row = element('article', 'message-row' + (own ? ' own' : '') + (gone ? ' deleted' : '')); row.dataset.id = message.id;
   row.appendChild(avatar({id:message.user_id, name:message.name}));
   const bubble = element('div', 'message-bubble');
-  bubble.appendChild(element('div', 'message-author', message.name));
+  const author = element('div', 'message-author', message.name); if(admin) author.appendChild(adminTag());
+  bubble.appendChild(author);
   if(!gone && message.reply_to) {
     const quote = element('button', 'message-quote'); quote.type = 'button'; quote.dataset.jump = message.reply_to;
     quote.appendChild(element('strong', '', source ? source.name : 'Сообщение'));
@@ -100,9 +102,10 @@ export function renderMessages(mode) {
     }
     const source = message.reply_to ? byId.get(message.reply_to) : null;
     const read = message.user_id === state.user.id && !message.deleted && readByOthers(message.id);
-    const signature = [message.rev || 0, message.name, read ? 1 : 0, source ? (source.rev || 0) + ':' + source.name : '-', state.user.id].join('|');
+    const admin = isOwner(message.user_id);
+    const signature = [message.rev || 0, message.name, read ? 1 : 0, source ? (source.rev || 0) + ':' + source.name : '-', state.user.id, admin ? 1 : 0, state.user.owner ? 1 : 0].join('|');
     let entry = rows.get(message.id);
-    if(!entry || entry.signature !== signature) {entry = {signature, node:buildRow(message, source, read)}; rows.set(message.id, entry);}
+    if(!entry || entry.signature !== signature) {entry = {signature, node:buildRow(message, source, read, admin)}; rows.set(message.id, entry);}
     wanted.push(entry.node);
   });
   rows.forEach((_entry, id) => {if(!byId.has(id)) rows.delete(id);});
@@ -164,7 +167,7 @@ export function renderPeople() {
   const fragment = document.createDocumentFragment();
   state.people.forEach(person => {
     const row = element('div', 'person' + (person.online ? ' online' : '')); row.appendChild(avatar(person));
-    const name = element('span', 'person-name', person.name); if(person.id === state.user.id) name.appendChild(element('small', '', 'вы'));
+    const name = element('span', 'person-name', person.name); if(person.id === state.user.id) name.appendChild(element('small', '', 'вы')); if(person.owner) name.appendChild(adminTag());
     row.appendChild(name); fragment.appendChild(row);
   });
   $('people-list').replaceChildren(fragment); connection(state.online);
