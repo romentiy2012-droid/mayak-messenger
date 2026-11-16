@@ -7,7 +7,7 @@ export const problem = error => error && error.status ? error.message : 'Нет 
 const hash = new URLSearchParams(location.hash.slice(1));
 export const state = {
   user:null, messages:[], people:[], rev:0, older:false, online:false,
-  reply:null, editing:null, readUpTo:0, draft:null,
+  reply:null, editing:null, readUpTo:0, draft:null, attachment:null,
   polling:false, again:false, sending:false, inviteURL:'', install:null,
   invitation:hash.get('invite') || '', resetToken:hash.get('reset') || ''
 };

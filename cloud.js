@@ -38,7 +38,9 @@
     try{legacyAnon=JSON.parse(atob(key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role==='anon';}catch{}
     if(!key.startsWith('sb_publishable_') && !legacyAnon) throw fail('Нужен публичный ключ Supabase. Секретный ключ в приложении запрещён.',503);
     client=window.MayakSupabase.createClient(url.origin,key,{auth:{storageKey:'mayak.cloud.auth:'+url.hostname,persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{fetch:async (input,init={})=>{
-      const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
+      // Файлам даём больше времени: фото по мобильной сети может грузиться дольше обычного запроса.
+      const limit=String(typeof input==='string'?input:input.url||'').includes('/storage/v1/')?90000:15000;
+      const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),limit);
       const abort=()=>controller.abort();if(init.signal?.aborted)abort();else init.signal?.addEventListener('abort',abort,{once:true});
       try{return await fetch(input,{...init,signal:controller.signal});}finally{clearTimeout(timeout);init.signal?.removeEventListener('abort',abort);}
     }}});
@@ -66,7 +68,7 @@
     storage.set(null);
     return {user:member,room:'Наш круг',csrf:''};
   }
-  const COLUMNS='id,user_id,name,text,nonce,created,reply_to,edited,deleted,reactions,rev';
+  const COLUMNS='id,user_id,name,text,nonce,created,reply_to,edited,deleted,reactions,rev,kind,file,file_meta';
   // before — страница старых сообщений; rev — всё новое и изменённое после этой отметки; иначе — последние сообщения.
   async function messages(params) {
     const q=db().from('mayak_messages').select(COLUMNS);
@@ -115,6 +117,7 @@
       const token=await rpc('invite');const url=new URL(location.pathname,location.origin);url.hash=new URLSearchParams({invite:token}).toString();return {url:url.href};
     }
     if(route==='messages' && options.method==='POST')return {message:await rpc('post',{p_text:body.text,p_nonce:body.nonce,p_reply:body.reply||null})};
+    if(route==='attach')return {message:await rpc('attach',{p_kind:body.kind,p_file:body.file,p_meta:body.meta||{},p_text:body.text||'',p_nonce:body.nonce,p_reply:body.reply||null})};
     if(route==='edit')return {message:await rpc('edit',{p_id:body.id,p_text:body.text})};
     if(route==='delete')return {message:await rpc('delete',{p_id:body.id})};
     if(route==='react')return {message:await rpc('react',{p_id:body.id,p_emoji:body.emoji||null})};
@@ -141,6 +144,27 @@
       })
       .subscribe(status=>{if(status==='SUBSCRIBED')pendingCallback?.('ready');});
   }
+  // Файлы вложений: закрытый бакет, у каждого участника своя папка.
+  const BUCKET='mayak';
+  async function upload(blob,extension){
+    const auth=unwrap(await db().auth.getSession());
+    if(!auth.session) throw fail('Войдите в чат.',401);
+    const random=new Uint8Array(12);crypto.getRandomValues(random);
+    const path=auth.session.user.id+'/'+Array.from(random,b=>b.toString(16).padStart(2,'0')).join('')+'.'+extension;
+    const result=await db().storage.from(BUCKET).upload(path,blob,{contentType:blob.type,cacheControl:'31536000',upsert:false});
+    if(result.error){
+      const status=Number(result.error.statusCode||result.error.status)||0;
+      if(!status) throw new Error('upload failed'); // нет связи — без status, приложение предложит повторить
+      throw fail(status===413?'Файл слишком большой.':status===403||status===401?'Нет доступа к хранилищу файлов.':'Не удалось загрузить файл.',status);
+    }
+    return path;
+  }
+  async function download(path){
+    const result=await db().storage.from(BUCKET).download(path);
+    if(result.error) throw fail('Файл недоступен.',404);
+    return result.data;
+  }
+  async function removeFile(path){await db().storage.from(BUCKET).remove([path]);}
   function stop(){pendingCallback=null;if(channel){db().removeChannel(channel).catch(()=>{});channel=null;}lastHeartbeat=0;}
-  window.MayakCloud={api,watch,stop};
+  window.MayakCloud={api,watch,stop,upload,download,removeFile};
 })();

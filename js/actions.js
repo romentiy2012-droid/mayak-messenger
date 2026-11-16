@@ -3,6 +3,7 @@ import {$, state, post, problem, toast, button, element, copyText, snippet} from
 import {messageById, mergeMessages, markRead} from './messages.js';
 import {startReply, startEdit} from './composer.js';
 import {scrollBottom} from './viewport.js';
+import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia} from './media.js';
 
 const QUICK = ['👍','❤️','😂','😮','😢','🙏'];
 let sheetOpened = 0, press = null, scrollQueued = false;
@@ -14,8 +15,12 @@ async function react(id, emoji) {
   catch(error) {toast(problem(error));}
 }
 async function removeMessage(id) {
-  try {mergeMessages([(await post('delete', {id})).message], 'changed');}
-  catch(error) {toast(problem(error));}
+  const before = messageById(id), file = before && before.file;
+  try {
+    mergeMessages([(await post('delete', {id})).message], 'changed');
+    // Вместе с сообщением стираем и сам файл из хранилища.
+    if(file) {stopVoice(); forgetMedia(file); window.MayakCloud.removeFile(file).catch(() => {});}
+  } catch(error) {toast(problem(error));}
 }
 function jumpTo(id) {
   const row = $('messages').querySelector('[data-id="' + id + '"]');
@@ -34,9 +39,10 @@ function openSheet(id) {
   sheet.appendChild(reactions);
   sheet.appendChild(element('p', 'sheet-preview', message.name + ': ' + snippet(message.text)));
   sheet.appendChild(button('Ответить', () => {closeSheet(); startReply(id);}, 'sheet-action'));
-  sheet.appendChild(button('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'sheet-action'));
+  const kind = message.kind || 'text', plain = kind === 'text';
+  if(plain || (message.file_meta || {}).caption) sheet.appendChild(button('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'sheet-action'));
   const own = message.user_id === state.user.id;
-  if(own) sheet.appendChild(button('Изменить', () => {closeSheet(); startEdit(id);}, 'sheet-action'));
+  if(own && plain) sheet.appendChild(button('Изменить', () => {closeSheet(); startEdit(id);}, 'sheet-action'));
   // Своё сообщение удаляет автор; любое — админ.
   if(own || state.user.owner) {
     sheet.appendChild(button(own ? 'Удалить' : 'Удалить (админ)', () => {
@@ -59,7 +65,9 @@ export function initActions() {
   list.addEventListener('click', event => {
     const quote = event.target.closest('[data-jump]'); if(quote) {jumpTo(Number(quote.dataset.jump)); return;}
     const chip = event.target.closest('[data-react]'); if(chip) {react(rowId(chip), chip.dataset.react); return;}
-    const more = event.target.closest('.message-more'); if(more) openSheet(rowId(more));
+    const more = event.target.closest('.message-more'); if(more) {openSheet(rowId(more)); return;}
+    const play = event.target.closest('.voice-play'); if(play) {toggleVoice(rowId(play)).catch(error => toast(error.message)); return;}
+    const photo = event.target.closest('[data-photo]'); if(photo) openViewer(Number(photo.dataset.photo));
   });
   list.addEventListener('contextmenu', event => {
     const bubble = event.target.closest('.message-bubble');
@@ -99,5 +107,8 @@ export function initActions() {
   };
   list.addEventListener('touchend', endPress);
   list.addEventListener('touchcancel', endPress);
+  $('viewer-layer').addEventListener('click', closeViewer);
+  list.addEventListener('keydown', event => {const photo = event.target.closest('[data-photo]'); if(photo && (event.key === 'Enter' || event.key === ' ')) {event.preventDefault(); openViewer(Number(photo.dataset.photo));}});
+  document.addEventListener('keydown', event => {if(event.key === 'Escape' && !$('viewer-layer').hidden) {event.stopImmediatePropagation(); closeViewer();}}, true);
   document.addEventListener('keydown', event => {if(event.key === 'Escape' && !$('sheet-layer').hidden) {event.stopImmediatePropagation(); closeSheet();}}, true);
 }

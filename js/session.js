@@ -5,6 +5,7 @@ import {adjustViewport} from './viewport.js';
 import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, clearTyping, resetList} from './messages.js';
 import {restoreDraft, resetComposer} from './composer.js';
 import {closeSheet} from './actions.js';
+import {stopVoice, closeViewer} from './media.js';
 
 let generation = 0, timer = null;
 
@@ -45,7 +46,7 @@ export function showJoin(forget) {
   clearTimeout(timer);
   resetComposer(forget);
   state.messages = []; state.people = []; state.rev = 0; state.older = false; state.inviteURL = ''; state.readUpTo = 0;
-  clearTyping(); resetList(); closeSheet();
+  clearTyping(); stopVoice(); closeViewer(); resetList(); closeSheet();
   $('people-list').replaceChildren(); $('jump-button').hidden = true;
   try {if(navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});} catch(_error) {}
   state.user = null; $('chat').hidden = true; $('welcome').hidden = false; $('push-banner').hidden = true;

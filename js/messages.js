@@ -3,6 +3,7 @@ import {$, state, post, element, avatar, adminTag, snippet} from './core.js';
 import {scrollBottom, nearBottom} from './viewport.js';
 import {ping} from './sound.js';
 import {renderContext} from './composer.js';
+import {photoNode, voiceNode} from './media.js';
 
 const typing = new Map();
 let readTimer = null;
@@ -66,9 +67,16 @@ function buildRow(message, source, read, admin) {
     quote.appendChild(element('span', '', source ? (source.deleted ? 'Сообщение удалено' : snippet(source.text)) : 'Более раннее сообщение'));
     bubble.appendChild(quote);
   }
-  const text = element('div', 'message-text');
-  if(gone) text.textContent = 'Сообщение удалено'; else textWithLinks(text, message.text);
-  bubble.appendChild(text);
+  const kind = gone ? 'text' : (message.kind || 'text'), meta = message.file_meta || {};
+  if(kind === 'photo' && message.file) bubble.appendChild(photoNode(message));
+  if(kind === 'voice' && message.file) bubble.appendChild(voiceNode(message));
+  // У вложения текст — запасной («📷 Фото»); показываем его, только если это подпись.
+  if(kind === 'text' || (kind === 'photo' && meta.caption)) {
+    const text = element('div', 'message-text');
+    if(gone) text.textContent = 'Сообщение удалено'; else textWithLinks(text, message.text);
+    bubble.appendChild(text);
+  }
+  if(kind !== 'text') row.classList.add('media');
   const groups = new Map();
   if(!gone) Object.entries(message.reactions || {}).forEach(([user, emoji]) => {const group = groups.get(emoji) || {count:0, mine:false}; group.count++; if(user === state.user.id) group.mine = true; groups.set(emoji, group);});
   if(groups.size) {

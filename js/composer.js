@@ -1,13 +1,67 @@
 // Поле ввода: отправка, ответ и изменение, «печатает», сохранение черновика.
-import {$, state, post, prefs, snippet} from './core.js';
+import {$, state, post, prefs, snippet, toast} from './core.js';
 import {messageById, mergeMessages, connection} from './messages.js';
+import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './media.js';
 
-let typingSent = 0, draftTimer = null;
+let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
+const MAX_RECORDING = 300; // секунд
+function newNonce() {const random = new Uint32Array(4); crypto.getRandomValues(random); return Array.from(random).map(value => value.toString(16)).join('-');}
 
 export function resizeComposer() {
   const input = $('message-input');
   input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 130) + 'px';
-  $('send-button').disabled = state.sending || !input.value.trim();
+  const filled = !!input.value.trim() || !!state.attachment;
+  $('send-button').disabled = state.sending || !filled;
+  // Пока писать нечего, на месте кнопки отправки — микрофон.
+  const voice = canRecord() && !filled && !state.editing;
+  $('voice-button').hidden = !voice; $('send-button').hidden = voice;
+  $('attach-button').hidden = !!state.editing;
+}
+// Полоса над полем ввода: выбранное фото или неотправленная запись.
+function renderAttachment() {
+  const item = state.attachment;
+  $('attachment-bar').hidden = !item;
+  if(!item) {$('attachment-thumb').removeAttribute('src'); return;}
+  const photo = item.kind === 'photo';
+  $('attachment-title').textContent = photo ? 'Фото' : 'Голосовое · ' + clock(item.meta.duration);
+  $('attachment-text').textContent = photo ? 'Добавьте подпись или отправьте так' : 'Не отправлено — нажмите «отправить»';
+  $('attachment-thumb').hidden = !photo;
+  if(photo) $('attachment-thumb').src = item.preview;
+}
+function clearAttachment() {
+  if(state.attachment && state.attachment.preview) URL.revokeObjectURL(state.attachment.preview);
+  state.attachment = null; renderAttachment(); resizeComposer();
+}
+async function pickPhoto(file) {
+  try {
+    const item = await preparePhoto(file);
+    clearAttachment();
+    item.preview = URL.createObjectURL(item.blob); state.attachment = item;
+    renderAttachment(); resizeComposer();
+  } catch(error) {toast(error.message);}
+}
+function recordTick() {
+  if(!recording) return;
+  const seconds = (Date.now() - recording.started) / 1000;
+  $('record-time').textContent = clock(seconds);
+  if(seconds >= MAX_RECORDING) endRecording(true);
+}
+async function beginRecording() {
+  if(recording || state.sending) return;
+  try {recording = await startRecording();} catch(error) {toast(error.message); return;}
+  $('message-form').hidden = true; $('record-bar').hidden = false;
+  recordTick(); recordTimer = setInterval(recordTick, 250);
+}
+async function endRecording(send) {
+  const current = recording; recording = null; clearInterval(recordTimer);
+  $('record-bar').hidden = true; $('message-form').hidden = false;
+  if(!current) return;
+  if(!send) {current.cancel(); return;}
+  try {
+    const item = await current.finish();
+    clearAttachment(); state.attachment = item; renderAttachment(); resizeComposer();
+    await submit({preventDefault() {}});
+  } catch(error) {toast(error.message);}
 }
 // Полоса над полем ввода: на что отвечаем или что изменяем.
 export function renderContext() {
@@ -67,6 +121,8 @@ export function restoreDraft() {
 export function resetComposer(forget) {
   clearTimeout(draftTimer);
   if(forget && state.user) prefs.set(draftKey(), null);
+  if(recording) endRecording(false);
+  clearAttachment();
   $('message-input').value = ''; state.draft = null; state.reply = null; state.editing = null; typingSent = 0;
   $('composer-context').hidden = true; $('send-error').hidden = true; resizeComposer();
 }
@@ -74,19 +130,26 @@ export function resetComposer(forget) {
 async function submit(event) {
   event.preventDefault();
   const input = $('message-input'), text = input.value.trim();
-  if(!text || state.sending) return;
+  if((!text && !state.attachment) || state.sending) return;
   state.sending = true; $('send-button').disabled = true; $('send-error').hidden = true;
   try {
     if(state.editing) {
       const original = messageById(state.editing);
       if(original && original.text !== text) mergeMessages([(await post('edit', {id:state.editing, text})).message], 'changed');
       state.editing = null; restoreDraft(); renderContext();
+    } else if(state.attachment) {
+      // Сначала файл уходит в хранилище, потом создаётся сообщение. Путь и номер отправки запоминаются:
+      // если связь оборвалась на втором шаге, повтор не загружает файл заново и не создаёт дубль.
+      const item = state.attachment;
+      if(!item.nonce) item.nonce = newNonce();
+      if(!item.path) {item.path = await window.MayakCloud.upload(item.blob, item.extension); rememberMedia(item.path, item.blob);} // свой файл не скачиваем обратно
+      const result = await post('attach', {kind:item.kind, file:item.path, meta:item.meta, text:item.kind === 'photo' ? text : '', nonce:item.nonce, reply:state.reply || null});
+      if(item.kind === 'photo') input.value = '';
+      state.draft = null; state.reply = null; typingSent = 0;
+      clearAttachment(); saveDraft(); renderContext(); mergeMessages([result.message], 'sent');
     } else {
       const reply = state.reply || null;
-      if(!state.draft || state.draft.text !== text || state.draft.reply !== reply) {
-        const random = new Uint32Array(4); crypto.getRandomValues(random);
-        state.draft = {text, reply, nonce:Array.from(random).map(value => value.toString(16)).join('-')};
-      }
+      if(!state.draft || state.draft.text !== text || state.draft.reply !== reply) state.draft = {text, reply, nonce:newNonce()};
       saveDraft();
       const result = await post('messages', state.draft);
       input.value = ''; state.draft = null; state.reply = null; typingSent = 0;
@@ -110,6 +173,12 @@ export function initComposer() {
     }
   });
   $('context-cancel').addEventListener('click', cancelContext);
+  $('attach-button').addEventListener('click', () => $('photo-input').click());
+  $('photo-input').addEventListener('change', () => {const file = $('photo-input').files[0]; $('photo-input').value = ''; if(file) pickPhoto(file);});
+  $('attachment-cancel').addEventListener('click', clearAttachment);
+  $('voice-button').addEventListener('click', beginRecording);
+  $('record-send').addEventListener('click', () => endRecording(true));
+  $('record-cancel').addEventListener('click', () => endRecording(false));
   // Телефон может выгрузить приложение без предупреждения — сохраняем, как только оно уходит с экрана.
   window.addEventListener('pagehide', saveDraft);
   document.addEventListener('visibilitychange', () => {if(document.hidden) saveDraft();});
