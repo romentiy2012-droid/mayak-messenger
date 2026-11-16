@@ -1,5 +1,5 @@
 // Вход и выход, экран входа, получение сообщений из облака.
-import {$, api, state} from './core.js';
+import {$, api, state, initials, palette} from './core.js';
 import {pushBanner, pushSync, pushFlags, clearNotifications} from './push.js';
 import {adjustViewport} from './viewport.js';
 import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, clearTyping, resetList} from './messages.js';
@@ -14,6 +14,8 @@ export function showChat(session) {
   state.invitation = ''; state.resetToken = ''; clearAddress();
   $('welcome').hidden = true; $('chat').hidden = false;
   document.querySelectorAll('.room-name').forEach(node => {node.textContent = session.room || 'Наш круг';});
+  $('my-name').textContent = state.user.name;
+  [$('my-avatar'), $('mobile-avatar')].forEach(node => {node.textContent = initials(state.user.name); node.className = 'avatar ' + palette(state.user.id);});
   $('invite-button').hidden = !state.user.owner;
   restoreDraft();
   adjustViewport();
@@ -28,10 +30,10 @@ export function renderJoin() {
   $('join-identity').hidden = reset; $('reset-note').hidden = !reset; $('reset-cancel').hidden = !reset;
   $('join-name').required = !reset; $('join-name').maxLength = register ? 32 : 80;
   $('join-name').placeholder = register ? 'Как вас называть в чате' : 'Имя, с которым регистрировались';
-  $('password-label').textContent = reset ? 'Новый пароль:' : 'Пароль:';
+  $('password-label').textContent = reset ? 'Новый пароль' : 'Пароль';
   $('password-note').hidden = reset;
   $('join-password').autocomplete = reset || register ? 'new-password' : 'current-password';
-  $('join-button').textContent = reset ? 'Сохранить пароль и войти' : register ? 'Создать аккаунт и войти' : 'Войти в чат';
+  $('join-button').firstChild.textContent = reset ? 'Сохранить пароль и войти ' : register ? 'Создать аккаунт и войти ' : 'Войти в чат ';
   $('invite-field').hidden = reset || !!state.invitation || !register;
 }
 // forget=true — участник сам вышел: черновик на устройстве стирается.

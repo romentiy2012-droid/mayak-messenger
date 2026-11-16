@@ -63,9 +63,5 @@ document.addEventListener('visibilitychange', () => {
   if(state.user) {clearNotifications(); markRead(); poll();}
 });
 
-// Часы на панели задач (видна на широком экране).
-const clock = () => {$('tray-clock').textContent = new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});};
-clock(); setInterval(clock, 20000);
-
 if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
 adjustViewport(); boot();

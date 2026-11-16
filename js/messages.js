@@ -55,15 +55,9 @@ export function resetList() {rows.clear(); dividers.clear(); $('messages').repla
 function buildRow(message, source, read) {
   const own = message.user_id === state.user.id, gone = !!message.deleted;
   const row = element('article', 'message-row' + (own ? ' own' : '') + (gone ? ' deleted' : '')); row.dataset.id = message.id;
-  // Строка переписки в духе старых чатов: имя, время в скобках, ниже текст.
-  const bubble = element('div', 'message-bubble'), head = element('div', 'message-head');
-  head.appendChild(element('span', 'message-author', message.name));
-  const stamp = element('span', 'message-meta');
-  const time = element('time', '', '(' + new Date(message.created).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) + ')');
-  time.dateTime = message.created; stamp.appendChild(time);
-  if(message.edited && !gone) stamp.appendChild(element('span', 'edited-mark', 'изменено'));
-  if(own && !gone) {const tick = element('span', 'delivery-tick' + (read ? ' read' : ''), read ? '✓✓' : '✓'); tick.title = read ? 'Прочитано' : 'Отправлено'; stamp.appendChild(tick);}
-  head.appendChild(stamp); bubble.appendChild(head);
+  row.appendChild(avatar({id:message.user_id, name:message.name}));
+  const bubble = element('div', 'message-bubble');
+  bubble.appendChild(element('div', 'message-author', message.name));
   if(!gone && message.reply_to) {
     const quote = element('button', 'message-quote'); quote.type = 'button'; quote.dataset.jump = message.reply_to;
     quote.appendChild(element('strong', '', source ? source.name : 'Сообщение'));
@@ -80,8 +74,13 @@ function buildRow(message, source, read) {
     groups.forEach((group, emoji) => {const chip = element('button', 'reaction' + (group.mine ? ' mine' : ''), emoji + (group.count > 1 ? ' ' + group.count : '')); chip.type = 'button'; chip.dataset.react = emoji; chip.setAttribute('aria-label', 'Реакция ' + emoji + (group.mine ? ', ваша' : '')); bar.appendChild(chip);});
     bubble.appendChild(bar);
   }
-  row.appendChild(bubble);
-  if(!gone) {const more = element('button', 'message-more', '▼'); more.type = 'button'; more.setAttribute('aria-label', 'Действия с сообщением'); row.appendChild(more);}
+  const stamp = element('div', 'message-meta');
+  if(message.edited && !gone) stamp.appendChild(element('span', 'edited-mark', 'изменено'));
+  const time = element('time', '', new Date(message.created).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}));
+  time.dateTime = message.created; stamp.appendChild(time);
+  if(own && !gone) {const tick = element('span', 'delivery-tick' + (read ? ' read' : ''), read ? '✓✓' : '✓'); tick.title = read ? 'Прочитано' : 'Отправлено'; stamp.appendChild(tick);}
+  bubble.appendChild(stamp); row.appendChild(bubble);
+  if(!gone) {const more = element('button', 'message-more', '⋯'); more.type = 'button'; more.setAttribute('aria-label', 'Действия с сообщением'); row.appendChild(more);}
   return row;
 }
 export function renderMessages(mode) {

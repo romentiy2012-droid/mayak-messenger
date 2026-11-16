@@ -5,10 +5,10 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#008080">
+  <meta name="theme-color" content="#176d5d">
   <meta name="description" content="Маяк — небольшой чат для своих. Вход по приглашению.">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <title>Маяк — свои на связи</title>
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -21,60 +21,61 @@
   <script type="module" src="./app.js"></script>
 </head>
 <body>
-  <main id="welcome" class="desktop welcome">
-    <section class="window login-window" aria-labelledby="welcome-title">
-      <div class="title-bar"><img src="./icon.svg" alt="" width="16" height="16"><h1 id="welcome-title" class="title-text">Вход в Маяк</h1></div>
-      <div class="window-body">
-        <div class="login-intro"><img src="./icon.svg" alt="" width="40" height="40"><p>Маяк — небольшой чат для своих.<br>Введите имя и пароль, чтобы войти.</p></div>
+  <main id="welcome" class="welcome">
+    <div class="welcome-top"><a class="brand" href="./"><img src="./icon.svg" alt="" width="36" height="36"><span>маяк<span class="brand-dot">.</span></span></a><span class="small-label">НЕБОЛЬШОЙ ЧАТ ДЛЯ СВОИХ</span></div>
+    <div class="welcome-content">
+      <div class="welcome-art" aria-hidden="true"><div class="art-disc"></div><div class="art-beam beam-one"></div><div class="art-beam beam-two"></div><div class="art-tower"><span></span><i></i></div><div class="art-island"></div><div class="art-wave wave-one"></div><div class="art-wave wave-two"></div><div class="art-message">ну что, все здесь?<span>✓✓</span></div><div class="art-reply">на связи <span>●</span></div></div>
+      <section class="join-card" aria-labelledby="welcome-title">
+        <p class="eyebrow">ВАШ КРУГ, ВАША ПЕРЕПИСКА</p>
+        <h1 id="welcome-title">Свои<br> на связи<span>.</span></h1>
+        <p class="welcome-description">Один общий чат. Знакомые имена.<br>И ничего лишнего между вами.</p>
         <form id="join-form">
           <p id="reset-note" class="reset-note" hidden>Придумайте новый пароль. Ссылка владельца одноразовая и действует сутки.</p>
           <div id="join-identity">
-            <label for="join-mode">Вход или регистрация:</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
-            <label for="join-name">Имя:</label>
+            <label for="join-mode">Вход или регистрация</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
+            <label for="join-name">Ваше имя</label>
             <input id="join-name" name="name" autocomplete="username" maxlength="80" placeholder="Имя, с которым регистрировались" required>
           </div>
-          <label id="password-label" for="join-password">Пароль:</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required>
-          <p id="password-note" class="password-note">Для первого входа выберите «Регистрация». Забыли пароль — попросите владельца чата прислать ссылку для сброса.</p>
-          <div id="invite-field" hidden><label for="join-invite">Приглашение для первого входа:</label><input id="join-invite" name="invite" autocomplete="off" placeholder="Код из ссылки владельца"></div>
+          <label id="password-label" for="join-password">Пароль</label><input id="join-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Не короче 8 символов" required><p id="password-note" class="password-note">Для первого входа выберите «Регистрация». Забыли пароль — попросите владельца чата прислать ссылку для сброса.</p>
+          <div id="invite-field" hidden><label for="join-invite">Приглашение для первого входа</label><input id="join-invite" name="invite" autocomplete="off" placeholder="Код из ссылки владельца"></div>
           <p id="join-error" class="form-error" role="alert"></p>
-          <div class="button-row"><button id="join-button" class="button default" type="submit">Войти в чат</button><button id="reset-cancel" class="button" type="button" hidden>Обычный вход</button></div>
+          <button id="join-button" class="primary-button" type="submit">Войти в чат <span aria-hidden="true">↗</span></button>
+          <button id="reset-cancel" class="link-button" type="button" hidden>Войти обычным способом</button>
         </form>
-      </div>
-      <div class="status-bar"><p id="welcome-network" class="status-cell grow network-status"><i></i> Проверяем связь</p><p class="status-cell">Вход по приглашению</p></div>
-    </section>
+        <p class="join-note"><span class="tiny-lock" aria-hidden="true">↳</span> Вход по приглашению. Имя видно участникам.</p>
+      </section>
+    </div>
+    <footer class="welcome-footer"><span>Маленькое место для ваших разговоров.</span><span id="welcome-network" class="network-status"><i></i> Проверяем связь</span></footer>
   </main>
 
-  <main id="chat" class="desktop app-shell" hidden>
-    <aside class="window buddy-window" aria-label="Участники">
-      <div class="title-bar"><img src="./icon.svg" alt="" width="16" height="16"><span class="title-text">Участники</span><span id="people-count" class="title-count">0</span></div>
-      <div class="window-body"><div id="people-list" class="people-list"></div></div>
+  <main id="chat" class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="./"><img src="./icon.svg" alt="" width="36" height="36"><span>маяк<span class="brand-dot">.</span></span></a>
+      <p class="sidebar-label">ВАШИ РАЗГОВОРЫ</p>
+      <div class="room-tile"><div class="room-icon" aria-hidden="true">#</div><div><strong class="room-name">Наш круг</strong><span>Общий чат</span></div><i class="selected-dot"></i></div>
+      <div class="people-heading"><span>УЧАСТНИКИ</span><span id="people-count">0</span></div>
+      <div id="people-list" class="people-list"></div>
+      <div class="sidebar-bottom"><span class="small-signal"><i></i> Облачный чат</span><p>Свои люди.<br>На одной волне.</p><div class="profile-button-wrap"><button id="profile-button" class="profile-button" type="button"><span id="my-avatar" class="avatar palette-0"></span><span><strong id="my-name"></strong><small>Изменить имя</small></span><span class="profile-edit" aria-hidden="true">↗</span></button></div></div>
     </aside>
-    <section class="window chat-window conversation" aria-label="Общий чат">
-      <header class="title-bar"><img src="./icon.svg" alt="" width="16" height="16"><h1 class="title-text">Маяк — <span class="room-name">Наш круг</span></h1><div class="title-buttons" aria-hidden="true"><span class="title-button">_</span><span class="title-button">□</span><span class="title-button">×</span></div></header>
-      <nav class="menu-bar" aria-label="Меню чата"><button id="more-button" class="menu-item" type="button"><u>Н</u>астройки</button><button id="profile-button" class="menu-item" type="button"><u>У</u>частники</button><button id="invite-button" class="menu-item" type="button" hidden><u>П</u>ригласить</button><button id="install-button" class="menu-item" type="button" hidden>Ус<u>т</u>ановить</button></nav>
-      <div id="offline-banner" class="info-bar" role="status" hidden>Нет связи с облаком. Переписка обновится после подключения.</div>
-      <div id="push-banner" class="info-bar" hidden><span>Узнавайте о новых сообщениях сразу.</span><button id="push-enable" class="button" type="button">Включить уведомления</button><button id="push-dismiss" class="button square" type="button" aria-label="Скрыть">×</button></div>
-      <div class="log-frame">
-        <div id="messages-scroll" class="messages-scroll" tabindex="0" aria-label="Сообщения">
-          <p class="thread-start">*** Начало переписки ***</p>
-          <button id="older-button" class="button older-button" type="button" hidden>Показать предыдущие сообщения</button>
-          <div id="empty-chat" class="empty-chat"><img src="./icon.svg" width="48" height="48" alt=""><h2>Первое сообщение — за вами</h2><p>Поздоровайтесь с друзьями.<br>С этого начнётся ваша переписка.</p></div>
-          <div id="messages" class="messages"></div>
-        </div>
+    <section class="conversation" aria-label="Общий чат">
+      <header class="chat-header">
+        <div class="header-title"><img class="mobile-logo" src="./icon.svg" alt="Маяк" width="36" height="36"><div><h1 class="room-name">Наш круг</h1><p id="connection-status" class="network-status"><i></i> Соединяемся</p></div></div>
+        <div class="header-actions"><button id="install-button" class="text-button" type="button" hidden><span aria-hidden="true">↓</span> Установить</button><button id="invite-button" class="invite-button" type="button" hidden><span aria-hidden="true">＋</span><span class="invite-caption"> Пригласить</span></button><button id="more-button" class="icon-button" type="button" aria-label="О чате и настройки">⋯</button></div>
+      </header>
+      <div id="offline-banner" class="offline-banner" role="status" hidden>Нет связи с облаком. Переписка обновится после подключения.</div>
+      <div id="push-banner" class="push-banner" hidden><span>Узнавайте о новых сообщениях сразу.</span><button id="push-enable" type="button">Включить уведомления</button><button id="push-dismiss" type="button" aria-label="Скрыть">×</button></div>
+      <div id="messages-scroll" class="messages-scroll" tabindex="0" aria-label="Сообщения">
+        <div class="thread-start"><span>ВАШ МАЛЕНЬКИЙ КРУГ</span><div></div></div>
+        <button id="older-button" class="older-button" type="button" hidden>Показать предыдущие сообщения</button>
+        <div id="empty-chat" class="empty-chat"><div class="empty-icon" aria-hidden="true"><img src="./icon.svg" width="58" height="58" alt=""></div><h2>Первое сообщение — за вами</h2><p>Поздоровайтесь с друзьями.<br>С этого начнётся ваша переписка.</p></div>
+        <div id="messages" class="messages"></div>
       </div>
-      <div class="composer-area">
-        <button id="jump-button" class="button jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span>▼</button>
-        <p id="send-error" class="send-error" role="alert" hidden></p>
-        <div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" class="button square" type="button" aria-label="Отменить">×</button></div>
-        <form id="message-form" class="composer"><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><button id="send-button" class="button default send-button" type="submit" disabled>Отправить</button></form>
-      </div>
-      <div class="status-bar"><p id="connection-status" class="status-cell grow network-status"><i></i> Соединяемся</p><p class="status-cell">Маяк 2.4.0</p></div>
+      <div class="composer-area"><button id="jump-button" class="jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></button><p id="send-error" class="send-error" role="alert" hidden></p><div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" type="button" aria-label="Отменить">×</button></div><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Участники и ваше имя"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.5.0</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
     </section>
-    <footer class="taskbar"><button id="start-button" class="button start-button" type="button"><img src="./icon.svg" alt="" width="18" height="18">Маяк</button><span class="task-button"><img src="./icon.svg" alt="" width="16" height="16">Маяк — <span class="room-name">Наш круг</span></span><span id="tray-clock" class="tray" aria-hidden="true"></span></footer>
   </main>
 
-  <div id="dialog-layer" class="dialog-layer" hidden><section class="window dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div class="title-bar"><span id="dialog-title" class="title-text"></span><button id="dialog-close" class="title-button" type="button" aria-label="Закрыть">×</button></div><div id="dialog-content" class="window-body"></div></section></div>
-  <div id="sheet-layer" class="sheet-layer" hidden><section id="sheet" class="window sheet" role="dialog" aria-modal="true" aria-label="Действия с сообщением"></section></div>
+  <div id="dialog-layer" class="dialog-layer" hidden><section class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button id="dialog-close" class="dialog-close icon-button" type="button" aria-label="Закрыть">×</button><div id="dialog-content"></div></section></div>
+  <div id="sheet-layer" class="sheet-layer" hidden><section id="sheet" class="sheet" role="dialog" aria-modal="true" aria-label="Действия с сообщением"></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>
