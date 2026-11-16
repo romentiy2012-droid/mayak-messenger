@@ -1,5 +1,5 @@
 // Окна: приглашение, участники и имя, сброс пароля, установка, настройки.
-import {$, api, post, state, prefs, element, button, avatar, initials, toast, copyText, problem} from './core.js';
+import {$, api, post, state, prefs, element, button, avatar, toast, copyText, problem} from './core.js';
 import {pushSupported, pushActive, pushEnable, pushDisable} from './push.js';
 import {unlockAudio, ping} from './sound.js';
 import {poll, showJoin} from './session.js';
@@ -7,7 +7,7 @@ import {poll, showJoin} from './session.js';
 let previousFocus = null;
 function dialog(title) {
   previousFocus = document.activeElement;
-  const content = $('dialog-content'); content.replaceChildren(element('h2', '', title)); content.firstChild.id = 'dialog-title';
+  const content = $('dialog-content'); content.replaceChildren(); $('dialog-title').textContent = title;
   $('dialog-layer').hidden = false; $('dialog-close').focus(); return content;
 }
 export function closeDialog() {$('dialog-layer').hidden = true; if(previousFocus && previousFocus.focus) previousFocus.focus();}
@@ -56,8 +56,7 @@ function profileDialog() {
     event.preventDefault(); submit.disabled = true;
     try {
       const result = await post('profile', {name:input.value});
-      state.user = result.user; $('my-name').textContent = state.user.name;
-      [$('my-avatar'), $('mobile-avatar')].forEach(node => {node.textContent = initials(state.user.name);});
+      state.user = result.user;
       closeDialog(); toast('Имя сохранено'); poll();
     } catch(error) {errorNode.textContent = problem(error);} finally {submit.disabled = false;}
   });
@@ -74,7 +73,7 @@ async function installApp() {
   content.appendChild(element('p', 'about-note', 'Для переписки нужен интернет. На iPhone уведомления работают только у приложения, добавленного на экран Домой.'));
 }
 function aboutDialog() {
-  const content = dialog('Небольшой чат для своих');
+  const content = dialog('Настройки Маяка');
   content.appendChild(element('p', '', '«Маяк» работает в облаке. Здесь одна общая переписка, а первый вход — по приглашению.'));
   content.appendChild(button('Установить приложение', installApp));
   content.appendChild(button(state.user.owner ? 'Участники, имя и пароли' : 'Участники и ваше имя', profileDialog));
@@ -99,7 +98,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.'));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.3.0 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.4.0 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
@@ -109,7 +108,7 @@ function aboutDialog() {
 export function initDialogs() {
   $('invite-button').addEventListener('click', inviteDialog);
   $('profile-button').addEventListener('click', profileDialog);
-  $('mobile-profile').addEventListener('click', profileDialog);
+  $('start-button').addEventListener('click', aboutDialog);
   $('more-button').addEventListener('click', aboutDialog);
   $('install-button').addEventListener('click', installApp);
   $('dialog-close').addEventListener('click', closeDialog);

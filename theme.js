@@ -10,7 +10,7 @@
     const choice = get(), dark = choice === 'dark' || (choice === 'auto' && !!media && media.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     const meta = document.querySelector('meta[name="theme-color"]');
-    if(meta) meta.content = dark ? '#131a17' : '#176d5d';
+    if(meta) meta.content = dark ? '#003535' : '#008080';
   }
   function set(value) {
     try {if(value === 'auto') localStorage.removeItem('mayak.theme'); else localStorage.setItem('mayak.theme', value);} catch(_error) {}
