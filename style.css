@@ -217,3 +217,13 @@ html[data-skin=terminal] .join-card::before{content:"ТЕРМИНАЛ СВЯЗИ
 html[data-skin=terminal] .join-card h1{font-size:40px!important;line-height:1.1}
 @media(max-width:760px){html[data-skin=terminal] .join-card h1{font-size:34px!important}}
 html[data-skin=terminal] .message-quote,html[data-skin=terminal] .message-quote span{text-transform:none}
+
+/* ===== 2.6: админ ===== */
+.role-tag{display:inline-block;margin-left:6px;font-size:10px;font-weight:500;letter-spacing:.2px;color:#8a9c86;text-transform:lowercase;vertical-align:1px}
+.person-action.danger{color:var(--danger)}
+.dialog-card .person-action{margin-left:0}
+.primary-button.danger-button{background:var(--danger)}
+html[data-theme=dark] .role-tag{color:#8c9c93}
+html[data-skin=terminal] .role-tag{color:var(--t-dim)!important;text-transform:uppercase}
+html[data-skin=terminal] .person-action.danger{color:var(--t-warn)!important}
+html[data-skin=terminal] .primary-button.danger-button{background-color:var(--t-warn)!important}

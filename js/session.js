@@ -1,5 +1,5 @@
 // Вход и выход, экран входа, получение сообщений из облака.
-import {$, api, state, initials, palette} from './core.js';
+import {$, api, state, prefs, initials, palette} from './core.js';
 import {pushBanner, pushSync, pushFlags, clearNotifications} from './push.js';
 import {adjustViewport} from './viewport.js';
 import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, clearTyping, resetList} from './messages.js';
@@ -12,6 +12,9 @@ function clearAddress() {if(location.hash) history.replaceState(null, '', locati
 export function showChat(session) {
   state.user = session.user; state.readUpTo = Number(session.user.last_read) || 0;
   state.invitation = ''; state.resetToken = ''; clearAddress();
+  // Оформление «терминал» — только у владельца; у остальных всегда обычное.
+  prefs.set('owner', state.user.owner ? '1' : null);
+  if(window.MayakTheme) window.MayakTheme.apply();
   $('welcome').hidden = true; $('chat').hidden = false;
   document.querySelectorAll('.room-name').forEach(node => {node.textContent = session.room || 'Наш круг';});
   $('my-name').textContent = state.user.name;

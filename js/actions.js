@@ -35,9 +35,11 @@ function openSheet(id) {
   sheet.appendChild(element('p', 'sheet-preview', message.name + ': ' + snippet(message.text)));
   sheet.appendChild(button('Ответить', () => {closeSheet(); startReply(id);}, 'sheet-action'));
   sheet.appendChild(button('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'sheet-action'));
-  if(message.user_id === state.user.id) {
-    sheet.appendChild(button('Изменить', () => {closeSheet(); startEdit(id);}, 'sheet-action'));
-    sheet.appendChild(button('Удалить', () => {
+  const own = message.user_id === state.user.id;
+  if(own) sheet.appendChild(button('Изменить', () => {closeSheet(); startEdit(id);}, 'sheet-action'));
+  // Своё сообщение удаляет автор; любое — админ.
+  if(own || state.user.owner) {
+    sheet.appendChild(button(own ? 'Удалить' : 'Удалить (админ)', () => {
       sheet.replaceChildren(element('p', 'sheet-question', 'Удалить сообщение у всех?'));
       sheet.appendChild(button('Удалить', () => {closeSheet(); removeMessage(id);}, 'sheet-action danger'));
       sheet.appendChild(button('Отмена', closeSheet, 'sheet-action quiet'));
