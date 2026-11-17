@@ -1,6 +1,6 @@
 {
   "name": "mayak-messenger",
-  "version": "2.9.1",
+  "version": "2.9.2",
   "description": "Маяк — закрытый облачный PWA-чат",
   "main": "app.js",
   "directories": {

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const config = window.MAYAK_CONFIG || {};
-  let client, channel, pendingCallback, lastHeartbeat = 0;
+  let client, channel, pendingCallback, lastHeartbeat = 0, skew = 0; // skew — на сколько часы сервера впереди часов телефона
   const pendingKey = 'mayak.cloud.pending:' + location.pathname;
   const storage = {get(){try{return JSON.parse(localStorage.getItem(pendingKey)||'null');}catch{return null;}},set(value){try{if(value)localStorage.setItem(pendingKey,JSON.stringify(value));else localStorage.removeItem(pendingKey);}catch{}}};
   function fail(message,status=400){return Object.assign(new Error(message),{status});}
@@ -92,7 +92,8 @@
     const common=page(unwrap(main)),personal=page(unwrap(direct));
     return {messages:common.messages.concat(personal.messages).sort((x,y)=>x.id-y.id),has_older:common.full,direct_full:personal.full,has_more:false};
   }
-  function person(row){return {...row,online:Date.now()-Date.parse(row.last_seen)<90000};}
+  // «В сети» — по времени сервера: часы телефона могут спешить или отставать, и тогда «в сети» не был бы никто.
+  function person(row){return {...row,online:Date.now()+skew-Date.parse(row.last_seen)<90000};}
   async function api(path,options={}) {
     const [route,query='']=path.split('?');const params=new URLSearchParams(query);
     const body=options.body?JSON.parse(options.body):{};
@@ -139,7 +140,11 @@
     if(route==='heard')return {message:await rpc('heard',{p_id:body.id})};
     if(route==='messages')return messages(params);
     if(route==='events'){
-      if(Date.now()-lastHeartbeat>25000){await rpc('profile');lastHeartbeat=Date.now();}
+      if(Date.now()-lastHeartbeat>25000){
+        const sent=Date.now(),me=await rpc('profile');lastHeartbeat=Date.now();
+        // last_seen в ответе — время сервера в момент отметки; сравниваем с серединой запроса.
+        const server=Date.parse(me&&me.last_seen);if(server)skew=server-(sent+lastHeartbeat)/2;
+      }
       const result=await messages(params);
       const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing'));
       const reads=unwrap(await db().from('mayak_reads').select('user_id,peer,last_read,typing'));
