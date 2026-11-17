@@ -1,4 +1,6 @@
 // Общее для всех модулей: состояние, доступ к облаку, мелкие помощники интерфейса.
+import {paintAvatar} from './avatars.js';
+export {paintAvatar} from './avatars.js';
 export const $ = id => document.getElementById(id);
 export const api = (path, options) => window.MayakCloud.api(path, options);
 export const post = (route, body) => api(route, {method:'POST', body:JSON.stringify(body)});
@@ -44,7 +46,7 @@ export function palette(id) {
 }
 // Маленькая пометка «админ» рядом с именем владельца чата.
 export function adminTag() {return element('small', 'role-tag', 'админ');}
-export function avatar(user) {return element('span', 'avatar ' + palette(user.id), initials(user.name));}
+export function avatar(user) {return paintAvatar(element('span', 'avatar ' + palette(user.id)), user);}
 export function snippet(text) {const line = text.replace(/\s+/g, ' ').trim(); return line.length > 90 ? line.slice(0,90) + '…' : line;}
 
 let toastTimer = null;

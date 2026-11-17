@@ -125,7 +125,9 @@
     if(route==='logout'){stop();unwrap(await db().auth.signOut({scope:'local'}));storage.set(null);return {};}
     if(route==='push-subscribe'){await rpc('push_subscribe',{p_endpoint:body.endpoint,p_p256dh:body.p256dh,p_auth:body.auth});return {};}
     if(route==='push-unsubscribe'){await rpc('push_unsubscribe',{p_endpoint:body.endpoint});return {};}
-    if(route==='profile')return {user:await rpc('profile',{p_name:body.name})};
+    if(route==='profile')return {user:await ('avatar_icon' in body
+      ? rpc('profile_avatar',{p_name:body.name,p_icon:body.avatar_icon,p_file:body.avatar_file})
+      : rpc('profile',{p_name:body.name}))};
     if(route==='invite'){
       const token=await rpc('invite');const url=new URL(location.pathname,location.origin);url.hash=new URLSearchParams({invite:token}).toString();return {url:url.href};
     }
@@ -146,7 +148,7 @@
         const server=Date.parse(me&&me.last_seen);if(server)skew=server-(sent+lastHeartbeat)/2;
       }
       const result=await messages(params);
-      const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing'));
+      const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing,avatar_icon,avatar_file'));
       const reads=unwrap(await db().from('mayak_reads').select('user_id,peer,last_read,typing'));
       return {...result,people:people.map(person),reads};
     }
@@ -167,12 +169,12 @@
   }
   // Файлы вложений: закрытый бакет, у каждого участника своя папка.
   const BUCKET='mayak';
-  async function upload(blob,extension){
+  async function upload(blob,extension,bucket=BUCKET){
     const auth=unwrap(await db().auth.getSession());
     if(!auth.session) throw fail('Войдите в чат.',401);
     const random=new Uint8Array(12);crypto.getRandomValues(random);
     const path=auth.session.user.id+'/'+Array.from(random,b=>b.toString(16).padStart(2,'0')).join('')+'.'+extension;
-    const result=await db().storage.from(BUCKET).upload(path,blob,{contentType:blob.type,cacheControl:'31536000',upsert:false});
+    const result=await db().storage.from(bucket).upload(path,blob,{contentType:blob.type,cacheControl:bucket===BUCKET?'31536000':'0',upsert:false});
     if(result.error){
       const status=Number(result.error.statusCode||result.error.status)||0;
       if(!status) throw new Error('upload failed'); // нет связи — без status, приложение предложит повторить
@@ -180,12 +182,15 @@
     }
     return path;
   }
-  async function download(path){
-    const result=await db().storage.from(BUCKET).download(path);
+  async function download(path,bucket=BUCKET){
+    const result=await db().storage.from(bucket).download(path);
     if(result.error) throw fail('Файл недоступен.',404);
     return result.data;
   }
   async function removeFile(path){await db().storage.from(BUCKET).remove([path]);}
   function stop(){pendingCallback=null;if(channel){db().removeChannel(channel).catch(()=>{});channel=null;}lastHeartbeat=0;}
-  window.MayakCloud={api,watch,stop,upload,download,removeFile};
+  window.MayakCloud={api,watch,stop,upload,download,removeFile,
+    avatarUpload:blob=>upload(blob,'jpg','mayak-avatars'),
+    avatarDownload:path=>download(path,'mayak-avatars'),
+    avatarRemove:path=>db().storage.from('mayak-avatars').remove([path])};
 })();

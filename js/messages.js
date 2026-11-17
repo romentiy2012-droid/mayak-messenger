@@ -1,5 +1,5 @@
 // Лента сообщений, список чатов, «прочитано», «печатает», «был в сети» и счётчики непрочитанных.
-import {$, state, post, element, avatar, adminTag, snippet, MAIN, roomOf, roomPeer} from './core.js';
+import {$, state, post, element, avatar, paintAvatar, adminTag, snippet, MAIN, roomOf, roomPeer} from './core.js';
 import {scrollBottom, nearBottom} from './viewport.js';
 import {ping, sent} from './sound.js';
 import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js';
@@ -96,7 +96,7 @@ function buildRow(message, source, read, admin) {
   }
   const own = message.user_id === state.user.id, gone = !!message.deleted;
   const row = element('article', 'message-row' + (own ? ' own' : '') + (gone ? ' deleted' : '')); row.dataset.id = message.id;
-  row.appendChild(avatar({id:message.user_id, name:message.name}));
+  row.appendChild(avatar(personById(message.user_id) || {id:message.user_id, name:message.name}));
   const bubble = element('div', 'message-bubble');
   const author = element('div', 'message-author', message.name); if(admin) author.appendChild(adminTag());
   bubble.appendChild(author);
@@ -260,7 +260,16 @@ export function renderChats() {
   $('people-count').textContent = state.people.length;
   $('people-list').replaceChildren(chatList(openRoom));
 }
-export function renderPeople() {renderChats(); renderHeader(); connection(state.online);}
+export function renderPeople() {
+  const me = state.people.find(person => person.id === state.user.id);
+  if(me) {state.user = {...state.user, ...me}; $('my-name').textContent = state.user.name;}
+  renderChats(); renderHeader(); connection(state.online);
+  // Обновляем и уже нарисованные сообщения, не трогая ленту и играющее голосовое.
+  document.querySelectorAll('.avatar[data-avatar-id]:not(.avatar-preview)').forEach(node => {
+    const person = node.dataset.avatarId === state.user.id ? state.user : personById(node.dataset.avatarId);
+    if(person) paintAvatar(node, person);
+  });
+}
 function renderHeader() {
   document.querySelectorAll('.room-name').forEach(node => {node.textContent = roomTitle(state.room);});
   $('chat').classList.toggle('direct', state.room !== MAIN);

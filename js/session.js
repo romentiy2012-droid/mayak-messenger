@@ -1,5 +1,6 @@
 // Вход и выход, экран входа, получение сообщений из облака.
-import {$, api, state, prefs, initials, palette, MAIN} from './core.js';
+import {$, api, state, prefs, paintAvatar, palette, MAIN} from './core.js';
+import {clearAvatarPhotos} from './avatars.js';
 import {pushBanner, pushSync, pushFlags, clearNotifications} from './push.js';
 import {adjustViewport} from './viewport.js';
 import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, readsLoaded, readChanged, setMainName, clearTyping, resetList} from './messages.js';
@@ -22,7 +23,7 @@ export function showChat(session) {
   document.querySelectorAll('.room-name').forEach(node => {node.textContent = session.room || 'Наш круг';});
   $('chat').classList.remove('direct');
   $('my-name').textContent = state.user.name;
-  [$('my-avatar'), $('mobile-avatar')].forEach(node => {node.textContent = initials(state.user.name); node.className = 'avatar ' + palette(state.user.id);});
+  [$('my-avatar'), $('mobile-avatar')].forEach(node => {node.className = 'avatar ' + palette(state.user.id); paintAvatar(node, state.user);});
   $('invite-button').hidden = !state.user.owner;
   restoreDraft();
   adjustViewport();
@@ -46,6 +47,7 @@ export function renderJoin() {
 // forget=true — участник сам вышел: черновик на устройстве стирается.
 export function showJoin(forget) {
   generation++; window.MayakCloud.stop();
+  clearAvatarPhotos();
   clearTimeout(timer);
   resetComposer(forget);
   state.messages = []; state.people = []; state.rev = 0; state.older = {}; state.read = {}; state.reads = []; state.room = MAIN; state.inviteURL = '';

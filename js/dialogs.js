@@ -1,17 +1,19 @@
 // Окна: приглашение, участники и имя, сброс пароля, установка, настройки.
-import {$, api, post, state, prefs, element, button, avatar, adminTag, initials, toast, copyText, problem} from './core.js';
+import {$, api, post, state, prefs, element, button, avatar, paintAvatar, adminTag, toast, copyText, problem} from './core.js';
+import {avatarEditor} from './avatars.js';
 import {pushSupported, pushActive, pushEnable, pushDisable} from './push.js';
 import {unlockAudio, ping} from './sound.js';
 import {poll, showJoin} from './session.js';
 import {chatList, openRoom, lastSeen} from './messages.js';
 
-let previousFocus = null;
+let previousFocus = null, cleanup = null, saving = false;
 function dialog(title) {
+  if(cleanup) {cleanup(); cleanup = null;}
   previousFocus = document.activeElement;
   const content = $('dialog-content'); content.replaceChildren(element('h2', '', title)); content.firstChild.id = 'dialog-title';
   $('dialog-layer').hidden = false; $('dialog-close').focus(); return content;
 }
-export function closeDialog() {$('dialog-layer').hidden = true; if(previousFocus && previousFocus.focus) previousFocus.focus();}
+export function closeDialog() {if(saving) return; if(cleanup) {cleanup(); cleanup = null;} $('dialog-layer').hidden = true; if(previousFocus && previousFocus.focus) previousFocus.focus();}
 // Ссылка с кнопками «скопировать» и «отправить».
 function shareLink(content, url, copyLabel, share) {
   content.appendChild(element('div', 'link-field', url));
@@ -73,21 +75,28 @@ function profileDialog() {
   content.appendChild(list);
   if(state.user.owner && state.people.length > 1) content.appendChild(element('p', 'about-note', '«Пароль» — отправить участнику ссылку, если он забыл пароль. «Удалить» — убрать участника из чата.'));
   const form = element('form', 'profile-in-dialog');
+  const editor = avatarEditor(state.user); form.appendChild(editor.node); cleanup = () => editor.dispose();
   const label = element('label', '', 'Ваше имя в чате'); label.htmlFor = 'profile-name'; form.appendChild(label);
   const input = element('input'); input.id = 'profile-name'; input.value = state.user.name; input.maxLength = 32; input.required = true; form.appendChild(input);
   form.appendChild(element('p', 'about-note', 'Меняется только подпись в чате. Для входа остаётся имя, с которым вы регистрировались.'));
   const errorNode = element('p', 'form-error'); form.appendChild(errorNode);
-  const submit = element('button', 'primary-button', 'Сохранить имя'); submit.type = 'submit'; form.appendChild(submit);
+  const submit = element('button', 'primary-button', 'Сохранить профиль'); submit.type = 'submit'; form.appendChild(submit);
   form.addEventListener('submit', async event => {
-    event.preventDefault(); submit.disabled = true;
+    event.preventDefault(); if(editor.busy()) {errorNode.textContent = 'Дождитесь подготовки фото.'; return;}
+    saving = true; submit.disabled = true; editor.disable(true); input.disabled = true; errorNode.textContent = ''; submit.textContent = 'Сохраняем…';
     try {
-      const result = await post('profile', {name:input.value});
+      const oldFile = state.user.avatar_file;
+      const result = await post('profile', {name:input.value, ...await editor.value()});
+      editor.commit();
       state.user = result.user; $('my-name').textContent = state.user.name;
-      [$('my-avatar'), $('mobile-avatar')].forEach(node => {node.textContent = initials(state.user.name);});
-      closeDialog(); toast('Имя сохранено'); poll();
-    } catch(error) {errorNode.textContent = problem(error);} finally {submit.disabled = false;}
+      const index = state.people.findIndex(person => person.id === state.user.id);
+      if(index >= 0) state.people[index] = {...state.people[index], ...state.user};
+      [$('my-avatar'), $('mobile-avatar')].forEach(node => paintAvatar(node, state.user));
+      if(oldFile && oldFile !== state.user.avatar_file) window.MayakCloud.avatarRemove(oldFile).catch(() => {});
+      saving = false; closeDialog(); toast('Профиль сохранён'); poll();
+    } catch(error) {errorNode.textContent = problem(error);} finally {saving = false; submit.disabled = false; editor.disable(false); input.disabled = false; submit.textContent = 'Сохранить профиль';}
   });
-  content.appendChild(form);
+  content.insertBefore(form, list);
 }
 export async function installApp() {
   if(state.install) {const prompt = state.install; state.install = null; await prompt.prompt(); const result = await prompt.userChoice; if(result.outcome === 'accepted') $('install-button').hidden = true; return result.outcome;}
@@ -104,7 +113,7 @@ function aboutDialog() {
   content.appendChild(element('p', '', '«Маяк» работает в облаке. Здесь одна общая переписка, а первый вход — по приглашению.'));
   content.appendChild(button('Чаты', chatsDialog));
   content.appendChild(button('Установить приложение', installApp));
-  content.appendChild(button(state.user.owner ? 'Участники, имя и пароли' : 'Участники и ваше имя', profileDialog));
+  content.appendChild(button(state.user.owner ? 'Профиль, участники и пароли' : 'Профиль и участники', profileDialog));
   if(state.user.owner) content.appendChild(button('Пригласить друзей', inviteDialog));
   if(pushSupported()) {
     const toggle = button('Уведомления…', async () => {
@@ -135,7 +144,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.9.4 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.10.0 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
