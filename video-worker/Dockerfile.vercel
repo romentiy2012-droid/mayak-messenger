@@ -1,0 +1,13 @@
+FROM node:24-trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+COPY lib ./lib
+COPY server.js ./
+COPY verify-runtime.js ./
+ENV NODE_ENV=production PORT=8080 FFMPEG_PATH=/usr/bin/ffmpeg FFPROBE_PATH=/usr/bin/ffprobe
+USER node
+RUN node verify-runtime.js
+EXPOSE 8080
+CMD ["node", "server.js"]

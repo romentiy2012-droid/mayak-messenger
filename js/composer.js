@@ -3,6 +3,7 @@ import {$, state, post, prefs, snippet, toast, MAIN, roomPeer} from './core.js';
 import {messageById, mergeMessages, connection} from './messages.js';
 import {followViewport} from './viewport.js';
 import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './media.js';
+import {recordVideo,canRecordVideo,cancelVideoRecording} from './video.js';
 
 let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
 const MAX_RECORDING = 300; // секунд
@@ -17,6 +18,11 @@ export function resizeComposer() {
   const voice = canRecord() && !filled && !state.editing;
   $('voice-button').hidden = !voice; $('send-button').hidden = voice;
   $('attach-button').hidden = !!state.editing;
+  $('camera-button').hidden = !(window.MAYAK_CONFIG||{}).videoEnabled || !canRecordVideo() || filled || !!state.editing;
+  $('camera-button').disabled = state.sending;
+  $('attach-button').disabled = state.sending;
+  $('voice-button').disabled = state.sending;
+  $('attachment-cancel').disabled = state.sending;
 }
 // Полоса над полем ввода: выбранное фото или неотправленная запись.
 function renderAttachment() {
@@ -24,7 +30,7 @@ function renderAttachment() {
   $('attachment-bar').hidden = !item;
   if(!item) {$('attachment-thumb').removeAttribute('src'); return;}
   const photo = item.kind === 'photo';
-  $('attachment-title').textContent = photo ? 'Фото' : 'Голосовое · ' + clock(item.meta.duration);
+  $('attachment-title').textContent = photo ? 'Фото' : (item.kind==='video'?'Видеокружочек':'Голосовое') + ' · ' + clock(item.meta.duration);
   $('attachment-text').textContent = photo ? 'Добавьте подпись или отправьте так' : 'Не отправлено — нажмите «отправить»';
   $('attachment-thumb').hidden = !photo;
   if(photo) $('attachment-thumb').src = item.preview;
@@ -118,6 +124,9 @@ export function restoreDraft() {
   input.value = saved && typeof saved.text === 'string' ? saved.text.slice(0, 2000) : '';
   state.reply = saved && Number(saved.reply) ? Number(saved.reply) : null;
   state.draft = saved && saved.nonce && input.value.trim() ? {text:input.value.trim(), reply:state.reply, nonce:String(saved.nonce)} : null;
+  if(!state.attachment){
+    try {const pending=JSON.parse(prefs.get('pending-video:'+state.user.id,'null'));if(pending&&pending.room===state.room){state.attachment={...pending,kind:'video'};renderAttachment();}}catch(_error){}
+  }
   resizeComposer();
 }
 // При выходе: поле очищается, а с forget=true стирается и сохранённый черновик.
@@ -125,6 +134,8 @@ export function resetComposer(forget) {
   clearTimeout(draftTimer);
   if(forget && state.user) prefs.set(draftKey(), null);
   if(recording) endRecording(false);
+  cancelVideoRecording();
+  state.sending=false;
   clearAttachment();
   $('message-input').value = ''; state.draft = null; state.reply = null; state.editing = null; typingSent = 0;
   $('composer-context').hidden = true; $('send-error').hidden = true; resizeComposer();
@@ -134,12 +145,32 @@ async function submit(event) {
   event.preventDefault();
   const input = $('message-input'), text = input.value.trim();
   if((!text && !state.attachment) || state.sending) return;
+  const submittingUser=state.user?.id;
   state.sending = true; $('send-button').disabled = true; $('send-error').hidden = true;
   try {
     if(state.editing) {
       const original = messageById(state.editing);
       if(original && original.text !== text) mergeMessages([(await post('edit', {id:state.editing, text})).message], 'changed');
       state.editing = null; restoreDraft(); renderContext();
+    } else if(state.attachment?.kind==='video') {
+      const item=state.attachment,userId=state.user.id;
+      if(!item.nonce)item.nonce=newNonce();
+      const persist=()=>prefs.set('pending-video:'+userId,JSON.stringify({room:item.room,peer:item.peer,reply:item.reply,nonce:item.nonce,path:item.path,job:item.job,meta:item.meta}));
+      if(!item.path){item.path=await window.MayakCloud.videoUpload(item.blob,item.extension);persist();}
+      const started=await post('video-start',{file:item.path,nonce:item.nonce,peer:item.peer||null,reply:item.reply||null});item.job=started.job.id;persist();
+      const waitingSince=Date.now();let result;
+      while(state.user?.id===userId){
+        result=await post('video-status',{id:item.job});
+        if(result.job.state==='sent')break;
+        if(['failed','cancelled'].includes(result.job.state))throw Object.assign(new Error(result.job.error||'Запись отменена.'),{status:422});
+        $('attachment-text').textContent='Видео обрабатывается…';
+        if(Date.now()-waitingSince>135000)throw Object.assign(new Error('Видео ещё обрабатывается. Повторите отправку чуть позже — дубля не будет.'),{status:408});
+        await new Promise(resolve=>setTimeout(resolve,1500));
+      }
+      if(state.user?.id!==userId)return;
+      prefs.set('pending-video:'+userId,null);
+      if(state.attachment===item)clearAttachment();
+      state.reply=null;renderContext();saveDraft();mergeMessages([result.message],'sent');
     } else if(state.attachment) {
       // Сначала файл уходит в хранилище, потом создаётся сообщение. Путь и номер отправки запоминаются:
       // если связь оборвалась на втором шаге, повтор не загружает файл заново и не создаёт дубль.
@@ -160,9 +191,10 @@ async function submit(event) {
     }
     connection(true);
   } catch(error) {
-    $('send-error').textContent = error.status ? error.message : 'Не отправлено. Текст сохранён — нажмите отправить ещё раз, когда связь вернётся.';
+    if(state.user?.id!==submittingUser)return;
+    $('send-error').textContent = error.status ? error.message : state.attachment?.kind==='video'?'Отправка прервалась. Нажмите отправить ещё раз — готовая запись не продублируется.':'Не отправлено. Текст сохранён — нажмите отправить ещё раз, когда связь вернётся.';
     $('send-error').hidden = false; connection(false);
-  } finally {state.sending = false; resizeComposer();}
+  } finally {if(!state.user||state.user.id===submittingUser){state.sending = false; resizeComposer();}}
 }
 
 export function initComposer() {
@@ -178,7 +210,18 @@ export function initComposer() {
   $('context-cancel').addEventListener('click', cancelContext);
   $('attach-button').addEventListener('click', () => $('photo-input').click());
   $('photo-input').addEventListener('change', () => {const file = $('photo-input').files[0]; $('photo-input').value = ''; if(file) pickPhoto(file);});
-  $('attachment-cancel').addEventListener('click', clearAttachment);
+  $('attachment-cancel').addEventListener('click',async()=>{
+    const item=state.attachment;if(state.sending)return;
+    if(item?.kind==='video'){
+      try {if(item.job)await post('video-cancel',{id:item.job});if(item.path)window.MayakCloud.videoSourceRemove(item.path).catch(()=>{});prefs.set('pending-video:'+state.user.id,null);}
+      catch(error){toast(error.message);return;}
+    }
+    clearAttachment();
+  });
+  $('camera-button').addEventListener('click',()=>{
+    const user=state.user?.id,room=state.room,peer=roomPeer(),reply=state.reply;
+    recordVideo(item=>{if(state.user?.id!==user)return;clearAttachment();state.attachment={...item,room,peer,reply};renderAttachment();resizeComposer();submit({preventDefault(){}});});
+  });
   $('voice-button').addEventListener('click', beginRecording);
   $('record-send').addEventListener('click', () => endRecording(true));
   $('record-cancel').addEventListener('click', () => endRecording(false));

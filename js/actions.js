@@ -4,6 +4,7 @@ import {messageById, mergeMessages, markRead} from './messages.js';
 import {startReply, startEdit} from './composer.js';
 import {scrollBottom} from './viewport.js';
 import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia, nextSpeed} from './media.js';
+import {stopVideo,forgetVideo} from './video.js';
 
 const QUICK = ['👍','❤️','😂','😮','😢','🙏'];
 // Остальные смайлы — по кнопке «＋». Любой другой можно ввести с клавиатуры в поле под ними.
@@ -27,7 +28,7 @@ async function removeMessage(id) {
   try {
     mergeMessages([(await post('delete', {id})).message], 'changed');
     // Вместе с сообщением стираем и сам файл из хранилища.
-    if(file) {stopVoice(); forgetMedia(file); window.MayakCloud.removeFile(file).catch(() => {});}
+    if(file) {stopVoice();stopVideo();if(before.kind==='video'){forgetVideo(file);window.MayakCloud.videoRemove(file).catch(()=>{});}else{forgetMedia(file);window.MayakCloud.removeFile(file).catch(() => {});}}
   } catch(error) {toast(problem(error));}
 }
 function jumpTo(id) {

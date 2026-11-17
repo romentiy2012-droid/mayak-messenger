@@ -1,0 +1,12 @@
+{
+  "name": "mayak-video-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": "24.x"},
+  "devDependencies": {
+    "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "@ffprobe-installer/ffprobe": "2.1.2"
+  },
+  "scripts": {"start": "node server.js", "test": "node --test test/*.test.js"}
+}

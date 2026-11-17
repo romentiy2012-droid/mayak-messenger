@@ -1,9 +1,10 @@
 // Лента сообщений, список чатов, «прочитано», «печатает», «был в сети» и счётчики непрочитанных.
-import {$, state, post, element, avatar, paintAvatar, adminTag, snippet, MAIN, roomOf, roomPeer} from './core.js';
+import {$, state, post, element, avatar, paintAvatar, adminTag, snippet, toast, MAIN, roomOf, roomPeer} from './core.js';
 import {scrollBottom, nearBottom} from './viewport.js';
 import {ping, sent} from './sound.js';
 import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js';
 import {photoNode, voiceNode, stopVoice} from './media.js';
+import {videoNode,stopVideo} from './video.js';
 
 const typing = new Map(); // ключ «чат|участник» → таймер
 let readTimer = null, mainName = 'Наш круг';
@@ -109,6 +110,7 @@ function buildRow(message, source, read, admin) {
   const kind = gone ? 'text' : (message.kind || 'text'), meta = message.file_meta || {};
   if(kind === 'photo' && message.file) bubble.appendChild(photoNode(message));
   if(kind === 'voice' && message.file) bubble.appendChild(voiceNode(message));
+  if(kind === 'video' && message.file) {bubble.appendChild(videoNode(message));row.classList.add('video-row');}
   // У вложения текст — запасной («📷 Фото»); показываем его, только если это подпись.
   if(kind === 'text' || (kind === 'photo' && meta.caption)) {
     const text = element('div', 'message-text');
@@ -277,9 +279,10 @@ function renderHeader() {
 // Открыть чат: недописанное в прежнем сохраняется, у нового — восстанавливается.
 export function openRoom(room) {
   if(!state.user || room === state.user.id) return;
+  if(state.sending&&state.attachment?.kind==='video'){toast('Дождитесь отправки кружочка.');return;}
   if(room !== MAIN && !personById(room)) room = MAIN;
   if(room === state.room) return;
-  saveDraft(); stopTyping(); stopVoice();
+  saveDraft(); stopTyping(); stopVoice();stopVideo();
   state.room = room; state.reply = null; state.editing = null;
   if(!(room in state.older)) state.older[room] = room !== MAIN && state.directFull; // история личного чата могла не уместиться в первую загрузку
   restoreDraft(); renderContext();

@@ -133,6 +133,17 @@
     }
     if(route==='messages' && options.method==='POST')return {message:await rpc('post_to',{p_peer:body.peer||null,p_text:body.text,p_nonce:body.nonce,p_reply:body.reply||null})};
     if(route==='attach')return {message:await rpc('attach_to',{p_peer:body.peer||null,p_kind:body.kind,p_file:body.file,p_meta:body.meta||{},p_text:body.text||'',p_nonce:body.nonce,p_reply:body.reply||null})};
+    if(route==='video-start'){
+      const auth=unwrap(await db().auth.getSession());if(!auth.session)throw fail('Войдите в чат.',401);
+      const response=await plain('/functions/v1/video',{method:'POST',headers:{'Content-Type':'application/json',apikey:config.supabasePublishableKey,Authorization:'Bearer '+auth.session.access_token},body:JSON.stringify(body)});
+      const result=await response.json().catch(()=>({}));if(!response.ok)throw fail(result.error||'Не удалось начать обработку видео.',response.status);return result;
+    }
+    if(route==='video-status'){
+      const job=unwrap(await db().from('mayak_video_jobs').select('*').eq('id',body.id).single());
+      const message=job.state==='sent'?unwrap(await db().from('mayak_messages').select(COLUMNS).eq('id',job.message_id).single()):null;
+      return {job,message};
+    }
+    if(route==='video-cancel')return {job:await rpc('video_cancel',{p_id:body.id})};
     if(route==='edit')return {message:await rpc('edit',{p_id:body.id,p_text:body.text})};
     if(route==='delete')return {message:await rpc('delete',{p_id:body.id})};
     if(route==='react')return {message:await rpc('react',{p_id:body.id,p_emoji:body.emoji||null})};
@@ -193,4 +204,10 @@
     avatarUpload:blob=>upload(blob,'jpg','mayak-avatars'),
     avatarDownload:path=>download(path,'mayak-avatars'),
     avatarRemove:path=>db().storage.from('mayak-avatars').remove([path])};
+  Object.assign(window.MayakCloud,{
+    videoUpload:(blob,extension)=>upload(blob,extension,'mayak-video-source'),
+    videoDownload:path=>download(path,'mayak-video'),
+    videoRemove:path=>db().storage.from('mayak-video').remove([path]),
+    videoSourceRemove:path=>db().storage.from('mayak-video-source').remove([path])
+  });
 })();

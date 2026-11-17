@@ -162,6 +162,7 @@ function reset() {
 }
 export function stopVoice() {reset();}
 export async function toggleVoice(id) {
+  document.dispatchEvent(new Event('mayak-audio-start'));
   if(player.id === id && player.audio) {
     if(player.audio.paused) player.audio.play().catch(() => {}); else player.audio.pause();
     return;

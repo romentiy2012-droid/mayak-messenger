@@ -5,3 +5,7 @@ verify_jwt = false
 # Участник ещё не вошёл; защита — одноразовый код из ссылки владельца.
 [functions.reset]
 verify_jwt = false
+
+# JWT проверяется через Auth API в самой функции; запись разрешает RPC участника.
+[functions.video]
+verify_jwt = false

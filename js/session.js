@@ -7,6 +7,7 @@ import {mergeMessages, renderMessages, renderPeople, connection, memberChanged, 
 import {restoreDraft, resetComposer} from './composer.js';
 import {closeSheet} from './actions.js';
 import {stopVoice, closeViewer} from './media.js';
+import {resetVideos} from './video.js';
 
 let generation = 0, timer = null;
 
@@ -48,6 +49,7 @@ export function renderJoin() {
 export function showJoin(forget) {
   generation++; window.MayakCloud.stop();
   clearAvatarPhotos();
+  resetVideos();
   clearTimeout(timer);
   resetComposer(forget);
   state.messages = []; state.people = []; state.rev = 0; state.older = {}; state.read = {}; state.reads = []; state.room = MAIN; state.inviteURL = '';
