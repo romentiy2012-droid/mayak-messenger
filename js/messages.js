@@ -279,7 +279,7 @@ function renderHeader() {
 // Открыть чат: недописанное в прежнем сохраняется, у нового — восстанавливается.
 export function openRoom(room) {
   if(!state.user || room === state.user.id) return;
-  if(state.sending&&state.attachment?.kind==='video'){toast('Дождитесь отправки кружочка.');return;}
+  if(state.attachment?.kind==='video'&&room!==state.attachment.room){toast('Сначала отправьте или уберите кружочек для «'+roomTitle(state.attachment.room)+'».');return;}
   if(room !== MAIN && !personById(room)) room = MAIN;
   if(room === state.room) return;
   saveDraft(); stopTyping(); stopVoice();stopVideo();

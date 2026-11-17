@@ -25,8 +25,7 @@ const rpc=(name:string,body:unknown,token=SERVICE)=>call('/rest/v1/rpc/mayak_vid
 async function remove(bucket:string,file:string){
  await fetch(URL_BASE+'/storage/v1/object/'+bucket,{method:'DELETE',headers:headers(SERVICE),body:JSON.stringify({prefixes:[file]}),signal:AbortSignal.timeout(12000)}).catch(()=>{});
 }
-async function dispatch(job:any,settings:any){
- const claim=await rpc('claim',{p_id:job.id});
+async function dispatch(claim:any,settings:any){
  if(!claim?.id)return;
  try{
   const source=await call('/storage/v1/object/sign/mayak-video-source/'+path(claim.source),SERVICE,{expiresIn:180});
@@ -61,13 +60,19 @@ export async function handle(request:Request):Promise<Response>{
   const body=await request.json();
   const user=await call('/auth/v1/user',token);
   if(!user.id)return answer({error:'Войдите в чат.'},401);
+  if(body.room!==(body.peer||'main'))return answer({error:'Обновите Маяк перед отправкой кружочка. Запись сохранена; проверьте указанный чат.'},409);
   const settings=await rpc('settings',{});
   if(!settings?.url||!settings?.key)return answer({error:'Обработка видео ещё настраивается.'},503);
   const worker=new URL(settings.url);
   if(worker.protocol!=='https:'||!worker.hostname.endsWith('.vercel.app')||worker.pathname!=='/api/process'||worker.search||worker.hash||worker.username||worker.password)throw Error('Неверная конфигурация обработки видео.');
   const job=await rpc('begin',{p_source:body.file,p_nonce:body.nonce,p_peer:body.peer||null,p_reply:body.reply||null},token);
   if(job.state==='cancelled')return answer({error:'Запись отменена. Запишите новый кружочек.'},409);
-  if(job.state!=='sent')EdgeRuntime.waitUntil(dispatch(job,settings));
+  if((job.peer||null)!==(body.peer||null))return answer({error:'Адресат сохранённой записи отличается. Откройте исходный чат или уберите вложение.'},409);
+  if(job.state!=='sent'){
+   // Claim before responding: a retry must not immediately poll the previous failed state.
+   const claim=await rpc('claim',{p_id:job.id});
+   if(claim?.id){EdgeRuntime.waitUntil(dispatch(claim,settings));return answer({job:claim});}
+  }
   return answer({job});
  }catch(error){return answer({error:String(error.message||'Не удалось отправить видео.').slice(0,200)},error.status||400);}
 }

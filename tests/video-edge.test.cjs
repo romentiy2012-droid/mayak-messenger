@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const {transformSync}=require('esbuild');
 const code=transformSync(fs.readFileSync('supabase/functions/video/index.ts','utf8'),{loader:'ts',format:'cjs',target:'node22'}).code;
-function setup({lostCommit=false,cancelled=false,member=true,legacy=false,named=false,serviceFailure=false}={}){
+function setup({lostCommit=false,cancelled=false,member=true,legacy=false,named=false,serviceFailure=false,initialFailed=false,wrongPeer=false}={}){
  const waited=[],requests=[],base='https://example.supabase.co',id='00000000-0000-4000-8000-000000000001',ticket='00000000-0000-4000-8000-000000000002';
  const job={id,ticket,state:'processing',output:id+'/'+id+'_'+ticket+'.mp4',source:id+'/'+'a'.repeat(24)+'.webm'};let committed=false;
  const serviceKey=legacy?'legacy.service.jwt':'sb_secret_test_service_key',publicKey=legacy?'legacy.anon.jwt':'sb_publishable_test_public_key';
@@ -17,7 +17,7 @@ function setup({lostCommit=false,cancelled=false,member=true,legacy=false,named=
   }
   if(url.endsWith('/auth/v1/user'))return json({id});
   if(url.endsWith('video_settings'))return serviceFailure?new Response('{"message":"Expected 3 parts in JWT; got 1"}',{status:401}):json({url:'https://test.vercel.app/api/process',key:'x'.repeat(32)});
-  if(url.endsWith('video_begin'))return member?json({...job,state:'queued'}):new Response('{"message":"Нет доступа к чату."}',{status:403});
+  if(url.endsWith('video_begin'))return member?json({...job,state:initialFailed?'failed':'queued',peer:wrongPeer?'00000000-0000-4000-8000-000000000003':null}):new Response('{"message":"Нет доступа к чату."}',{status:403});
   if(url.endsWith('video_claim'))return json(job);
   if(url.includes('/object/sign/'))return json({signedURL:'/object/sign/mayak-video-source/'+job.source+'?token=read'});
   if(url.includes('/object/upload/sign/'))return json({url:'/object/upload/sign/mayak-video/'+job.output+'?token=write'});
@@ -28,7 +28,7 @@ function setup({lostCommit=false,cancelled=false,member=true,legacy=false,named=
  };
  const context={exports:{},module:{exports:{}},Deno:{env:{get:name=>env[name]},serve(){}},EdgeRuntime:{waitUntil:p=>waited.push(p)},fetch,Request,Response,URL,AbortSignal,console:{error(){}},setTimeout,clearTimeout};context.module.exports=context.exports;
  vm.runInNewContext(code,context);
- const request=(token='user.session.jwt')=>new Request(base+'/functions/v1/video',{method:'POST',headers:{Origin:'https://romentiy2012-droid.github.io',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({file:job.source,nonce:'nonce'})});
+ const request=(token='user.session.jwt',extra={})=>new Request(base+'/functions/v1/video',{method:'POST',headers:{Origin:'https://romentiy2012-droid.github.io',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({file:job.source,nonce:'nonce',room:'main',...extra})});
  return {...context.module.exports,request,waited,requests,job};
 }
 test('video edge: authenticated member, private signed job, background conversion and completion',async()=>{
@@ -50,6 +50,13 @@ test('video edge: legacy JWT and named opaque API keys keep service and user aut
 test('video edge: lost successful commit response preserves the published file',async()=>{
  const app=setup({lostCommit:true});await app.handle(app.request());await Promise.all(app.waited);
  assert.equal(app.requests.filter(r=>r.method==='DELETE'&&r.url.endsWith('/object/mayak-video')).length,0);
+});
+test('video edge: retry claims a fresh processing attempt before response and rejects recipient changes',async()=>{
+ const app=setup({initialFailed:true}),response=await app.handle(app.request());
+ assert.equal(response.status,200);assert.equal((await response.json()).job.state,'processing');await Promise.all(app.waited);
+ const wrong=setup({wrongPeer:true}),rejected=await wrong.handle(wrong.request());
+ assert.equal(rejected.status,409);assert.equal(wrong.waited.length,0);assert.ok(!wrong.requests.some(r=>r.url.endsWith('video_claim')));
+ const legacy=setup();assert.equal((await legacy.handle(legacy.request('user.session.jwt',{room:null}))).status,409);assert.equal(legacy.waited.length,0);
 });
 test('video edge: cancelled conversion discards output, outsider never reaches worker',async()=>{
  const app=setup({cancelled:true});await app.handle(app.request());await Promise.all(app.waited);

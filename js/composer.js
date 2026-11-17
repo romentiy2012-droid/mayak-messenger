@@ -1,6 +1,6 @@
 // Поле ввода: отправка, ответ и изменение, «печатает», сохранение черновика.
 import {$, state, post, prefs, snippet, toast, MAIN, roomPeer} from './core.js';
-import {messageById, mergeMessages, connection} from './messages.js';
+import {messageById, mergeMessages, connection,roomTitle} from './messages.js';
 import {followViewport} from './viewport.js';
 import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './media.js';
 import {recordVideo,canRecordVideo,cancelVideoRecording} from './video.js';
@@ -31,10 +31,11 @@ function renderAttachment() {
   if(!item) {$('attachment-thumb').removeAttribute('src'); return;}
   const photo = item.kind === 'photo';
   $('attachment-title').textContent = photo ? 'Фото' : (item.kind==='video'?'Видеокружочек':'Голосовое') + ' · ' + clock(item.meta.duration);
-  $('attachment-text').textContent = photo ? 'Добавьте подпись или отправьте так' : 'Не отправлено — нажмите «отправить»';
+  $('attachment-text').textContent = item.kind==='video' ? videoDestination(item)+' · Не отправлено' : photo ? 'Добавьте подпись или отправьте так' : 'Не отправлено — нажмите «отправить»';
   $('attachment-thumb').hidden = !photo;
   if(photo) $('attachment-thumb').src = item.preview;
 }
+function videoDestination(item){return item.room===MAIN?'В общий чат':'Для '+roomTitle(item.room);}
 function clearAttachment() {
   if(state.attachment && state.attachment.preview) URL.revokeObjectURL(state.attachment.preview);
   state.attachment = null; renderAttachment(); resizeComposer();
@@ -154,16 +155,17 @@ async function submit(event) {
       state.editing = null; restoreDraft(); renderContext();
     } else if(state.attachment?.kind==='video') {
       const item=state.attachment,userId=state.user.id;
+      if(!item.room||item.room!==state.room||item.peer!==(item.room===MAIN?null:item.room))throw Object.assign(new Error('Запись предназначена для другого чата. Вернитесь в «'+roomTitle(item.room)+'» или уберите вложение.'),{status:409});
       if(!item.nonce)item.nonce=newNonce();
       const persist=()=>prefs.set('pending-video:'+userId,JSON.stringify({room:item.room,peer:item.peer,reply:item.reply,nonce:item.nonce,path:item.path,job:item.job,meta:item.meta}));
       if(!item.path){item.path=await window.MayakCloud.videoUpload(item.blob,item.extension);persist();}
-      const started=await post('video-start',{file:item.path,nonce:item.nonce,peer:item.peer||null,reply:item.reply||null});item.job=started.job.id;persist();
+      const started=await post('video-start',{file:item.path,nonce:item.nonce,room:item.room,peer:item.peer||null,reply:item.reply||null});item.job=started.job.id;persist();
       const waitingSince=Date.now();let result;
       while(state.user?.id===userId){
         result=await post('video-status',{id:item.job});
         if(result.job.state==='sent')break;
         if(['failed','cancelled'].includes(result.job.state))throw Object.assign(new Error(result.job.error||'Запись отменена.'),{status:422});
-        $('attachment-text').textContent='Видео обрабатывается…';
+        $('attachment-text').textContent=videoDestination(item)+' · Видео обрабатывается…';
         if(Date.now()-waitingSince>135000)throw Object.assign(new Error('Видео ещё обрабатывается. Повторите отправку чуть позже — дубля не будет.'),{status:408});
         await new Promise(resolve=>setTimeout(resolve,1500));
       }
@@ -193,6 +195,7 @@ async function submit(event) {
   } catch(error) {
     if(state.user?.id!==submittingUser)return;
     $('send-error').textContent = error.status ? error.message : state.attachment?.kind==='video'?'Отправка прервалась. Нажмите отправить ещё раз — готовая запись не продублируется.':'Не отправлено. Текст сохранён — нажмите отправить ещё раз, когда связь вернётся.';
+    if(state.attachment?.kind==='video')$('attachment-text').textContent=videoDestination(state.attachment)+' · Не отправлено — можно повторить';
     // A returned HTTP error still proves the cloud is reachable; keep the retryable attachment.
     $('send-error').hidden = false; connection(!!error.status);
   } finally {if(!state.user||state.user.id===submittingUser){state.sending = false; resizeComposer();}}
