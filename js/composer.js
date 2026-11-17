@@ -1,6 +1,7 @@
 // Поле ввода: отправка, ответ и изменение, «печатает», сохранение черновика.
 import {$, state, post, prefs, snippet, toast, MAIN, roomPeer} from './core.js';
 import {messageById, mergeMessages, connection} from './messages.js';
+import {followViewport} from './viewport.js';
 import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './media.js';
 
 let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
@@ -49,12 +50,12 @@ function recordTick() {
 async function beginRecording() {
   if(recording || state.sending) return;
   try {recording = await startRecording();} catch(error) {toast(error.message); return;}
-  $('message-form').hidden = true; $('record-bar').hidden = false;
+  $('message-form').hidden = true; $('record-bar').hidden = false; followViewport(1500);
   recordTick(); recordTimer = setInterval(recordTick, 250);
 }
 async function endRecording(send) {
   const current = recording; recording = null; clearInterval(recordTimer);
-  $('record-bar').hidden = true; $('message-form').hidden = false;
+  $('record-bar').hidden = true; $('message-form').hidden = false; followViewport(2000);
   if(!current) return;
   if(!send) {current.cancel(); return;}
   try {

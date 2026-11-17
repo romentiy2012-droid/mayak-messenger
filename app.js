@@ -3,7 +3,7 @@
 //   composer — поле ввода и черновики · actions — меню сообщения и жесты · dialogs — окна
 //   push — уведомления · viewport — высота и клавиатура · sound — сигнал
 import {$, api, post, state, toast, MAIN, roomOf} from './js/core.js';
-import {adjustViewport, followViewport} from './js/viewport.js';
+import {adjustViewport, followViewport, watchViewport} from './js/viewport.js';
 import {unlockAudio} from './js/sound.js';
 import {pushEnable, pushBanner, pushFlags, clearNotifications} from './js/push.js';
 import {mergeMessages, markRead, connection} from './js/messages.js';
@@ -67,4 +67,4 @@ document.addEventListener('visibilitychange', () => {
 });
 
 if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
-adjustViewport(); boot();
+adjustViewport(); watchViewport(); boot();

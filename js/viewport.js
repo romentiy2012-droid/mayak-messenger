@@ -17,6 +17,16 @@ export function adjustViewport() {
   root.style.setProperty('--app-top', Math.max(0, view.offsetTop) + 'px');
   if(atBottom) scrollBottom();
 }
+// iOS не всегда присылает событие, когда клавиатура убирается сама (например, на время записи голосового):
+// чат остаётся высотой «с клавиатурой», а внизу пустота. Раз в полсекунды сверяем высоту с видимой областью.
+export function watchViewport() {
+  setInterval(() => {
+    const view = window.visualViewport;
+    if(!view || document.hidden || $('chat').hidden || window.innerWidth > 760) return;
+    const applied = parseFloat(document.documentElement.style.getPropertyValue('--app-height'));
+    if(!(Math.abs(applied - view.height) < 2)) adjustViewport();
+  }, 500);
+}
 // Клавиатура выезжает около полусекунды, а события iOS приходят не всегда — подстраиваемся каждый кадр.
 let followUntil = 0;
 export function followViewport(duration) {

@@ -334,3 +334,8 @@ html[data-skin=terminal] .network-status.away i{background-color:var(--t-line)!i
 
 .system-note{display:flex;justify-content:center;margin:14px 0 18px;font-size:10px;color:#91a18e}.system-note span{background:#f0f4eb;border:1px solid #e6ecdf;border-radius:20px;padding:4px 12px;text-align:center}
 html[data-theme=dark] .system-note{color:#8c9c93}
+
+/* Меню действий работает как кнопки: долгое нажатие и отпускание пальца не выделяют текст. */
+.sheet-layer,.sheet,.sheet *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.sheet input{-webkit-user-select:text;user-select:text}
+.message-row{-webkit-touch-callout:none}

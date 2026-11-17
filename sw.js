@@ -1,4 +1,4 @@
-const CACHE = 'mayak-shell-2.9.0:' + self.registration.scope;
+const CACHE = 'mayak-shell-2.9.1:' + self.registration.scope;
 const SHELL = ['./', './style.css', './theme.js', './app.js', './js/core.js', './js/session.js', './js/messages.js', './js/composer.js', './js/actions.js', './js/dialogs.js', './js/push.js', './js/viewport.js', './js/sound.js', './js/media.js', './cloud.js', './vendor/supabase.js', './config.js', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.webmanifest'].map(path=>new URL(path,self.registration.scope).href);
 self.addEventListener('install', event => {event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));});
 self.addEventListener('activate', event => {event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('mayak-shell-') && key !== CACHE && (!key.includes(':http') || key.endsWith(':' + self.registration.scope))).map(key => caches.delete(key)))).then(() => self.clients.claim()));});

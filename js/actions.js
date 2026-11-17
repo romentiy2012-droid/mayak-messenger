@@ -81,6 +81,8 @@ function openSheet(id) {
   }
   sheet.appendChild(button('Отмена', closeSheet, 'sheet-action quiet'));
   sheetOpened = Date.now(); $('sheet-layer').hidden = false;
+  // Долгое нажатие на телефоне могло начать выделение текста — сбрасываем его.
+  try {const selection = window.getSelection(); if(selection) selection.removeAllRanges();} catch(_error) {}
 }
 
 export function initActions() {
