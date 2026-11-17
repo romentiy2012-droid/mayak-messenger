@@ -59,6 +59,7 @@ test('video UI: cancel, real camera preview, retry without duplicate, conversion
   await page.screenshot({path:path.join(root,'test-results/video-preview-mobile.png')});
   await page.evaluate(()=>window.videoTest.failNext=true);
   await page.getByRole('button',{name:'Отправить',exact:true}).click();await expect(page.locator('#send-error')).toContainText('Ответ потерялся');
+  await expect(page.locator('#offline-banner')).toBeHidden();
   await page.locator('#send-button').click();await expect(page.locator('.video-note')).toBeVisible({timeout:25000});
   await expect(page.locator('#attachment-bar')).toBeHidden({timeout:25000});
   const counts=await page.evaluate(()=>({uploads:window.videoTest.uploads,conversions:window.videoTest.conversions}));assert.deepEqual(counts,{uploads:1,conversions:1});

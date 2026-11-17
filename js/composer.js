@@ -193,7 +193,8 @@ async function submit(event) {
   } catch(error) {
     if(state.user?.id!==submittingUser)return;
     $('send-error').textContent = error.status ? error.message : state.attachment?.kind==='video'?'Отправка прервалась. Нажмите отправить ещё раз — готовая запись не продублируется.':'Не отправлено. Текст сохранён — нажмите отправить ещё раз, когда связь вернётся.';
-    $('send-error').hidden = false; connection(false);
+    // A returned HTTP error still proves the cloud is reachable; keep the retryable attachment.
+    $('send-error').hidden = false; connection(!!error.status);
   } finally {if(!state.user||state.user.id===submittingUser){state.sending = false; resizeComposer();}}
 }
 

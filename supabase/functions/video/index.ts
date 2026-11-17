@@ -2,14 +2,23 @@
 // Долгая конвертация выполняется внешним worker; здесь остаются проверка прав и финальная запись.
 const ORIGIN='https://romentiy2012-droid.github.io';
 const URL_BASE=Deno.env.get('SUPABASE_URL') || '';
-const SERVICE=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const APIKEY=Deno.env.get('SUPABASE_ANON_KEY') || SERVICE;
-const headers=(token:string)=>({apikey:APIKEY,Authorization:'Bearer '+token,'Content-Type':'application/json'});
+function namedKey(name:string){try{return JSON.parse(Deno.env.get(name)||'{}').default||'';}catch{return '';}}
+const SERVICE=namedKey('SUPABASE_SECRET_KEYS') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const APIKEY=namedKey('SUPABASE_PUBLISHABLE_KEYS') || Deno.env.get('SUPABASE_ANON_KEY') || SERVICE;
+function headers(token:string):Record<string,string>{
+ // Opaque sb_secret_ keys are API keys, never bearer JWTs. User JWTs retain user RLS.
+ const result:Record<string,string>={apikey:token===SERVICE?SERVICE:APIKEY,'Content-Type':'application/json'};
+ if(token!==SERVICE||token.split('.').length===3)result.Authorization='Bearer '+token;
+ return result;
+}
 const path=(value:string)=>value.split('/').map(encodeURIComponent).join('/');
 async function call(endpoint:string,token:string,body?:unknown){
  const response=await fetch(URL_BASE+endpoint,{method:body===undefined?'GET':'POST',headers:headers(token),body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(12000)});
  const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Object.assign(new Error(data.message||data.error||'Не удалось обработать запись.'),{status:response.status});
+ if(!response.ok){
+  if(token===SERVICE){console.error('mayak video service request failed',endpoint.split('?')[0],response.status);throw Object.assign(new Error('Серверная обработка временно недоступна. Повторите отправку.'),{status:502});}
+  throw Object.assign(new Error(data.message||data.error||'Не удалось обработать запись.'),{status:response.status});
+ }
  return data;
 }
 const rpc=(name:string,body:unknown,token=SERVICE)=>call('/rest/v1/rpc/mayak_video_'+name,token,body);
