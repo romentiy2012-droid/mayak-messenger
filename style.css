@@ -331,3 +331,6 @@ html[data-skin=terminal] .chat-row.online .avatar:after{background:var(--t-fg)}
 html[data-skin=terminal] .voice-speed{border:1px solid var(--t-line)!important;text-transform:none}
 html[data-skin=terminal] .message-voice.unheard .voice-play{outline:2px solid var(--t-warn);outline-offset:2px}
 html[data-skin=terminal] .network-status.away i{background-color:var(--t-line)!important}
+
+.system-note{display:flex;justify-content:center;margin:14px 0 18px;font-size:10px;color:#91a18e}.system-note span{background:#f0f4eb;border:1px solid #e6ecdf;border-radius:20px;padding:4px 12px;text-align:center}
+html[data-theme=dark] .system-note{color:#8c9c93}

@@ -1,7 +1,7 @@
 // Лента сообщений, список чатов, «прочитано», «печатает», «был в сети» и счётчики непрочитанных.
 import {$, state, post, element, avatar, adminTag, snippet, MAIN, roomOf, roomPeer} from './core.js';
 import {scrollBottom, nearBottom} from './viewport.js';
-import {ping} from './sound.js';
+import {ping, sent} from './sound.js';
 import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js';
 import {photoNode, voiceNode, stopVoice} from './media.js';
 
@@ -20,7 +20,7 @@ function readByOthers(message) {
 }
 export function unreadIn(room) {
   const mark = state.read[room] || 0;
-  return state.messages.filter(message => message.id > mark && roomOf(message) === room && message.user_id !== state.user.id && !message.deleted).length;
+  return state.messages.filter(message => message.id > mark && roomOf(message) === room && message.user_id !== state.user.id && !message.deleted && message.kind !== 'system').length;
 }
 // «в сети» или когда был в последний раз.
 export function lastSeen(person) {
@@ -89,6 +89,11 @@ const rows = new Map(), dividers = new Map();
 export function resetList() {rows.clear(); dividers.clear(); $('messages').replaceChildren();}
 function isOwner(id) {return !!id && state.people.some(person => person.id === id && person.owner);}
 function buildRow(message, source, read, admin) {
+  // Служебная строка («Имя добавлен в чат») — по центру, как разделитель дня, без автора и действий.
+  if(message.kind === 'system') {
+    const note = element('div', 'system-note'); note.dataset.id = message.id; note.appendChild(element('span', '', message.text));
+    return note;
+  }
   const own = message.user_id === state.user.id, gone = !!message.deleted;
   const row = element('article', 'message-row' + (own ? ' own' : '') + (gone ? ' deleted' : '')); row.dataset.id = message.id;
   row.appendChild(avatar({id:message.user_id, name:message.name}));
@@ -177,7 +182,7 @@ export function mergeMessages(messages, mode) {
     if(current) {if((message.rev || 0) >= (current.rev || 0)) known.set(message.id, message); return;}
     if(mode === 'new' && state.older[room] && oldest[room] && message.id < oldest[room]) return; // изменилось сообщение из ещё не загруженной истории
     known.set(message.id, message);
-    if(mode === 'new' && message.user_id !== state.user.id) {setTyping(room, message.user_id, false); if(!message.deleted) fresh = true;}
+    if(mode === 'new' && message.user_id !== state.user.id) {setTyping(room, message.user_id, false); if(!message.deleted && message.kind !== 'system') fresh = true;}
   });
   state.messages = Array.from(known.values()).sort((a, b) => a.id - b.id);
   // В памяти — не больше 500 сообщений на чат; более старые подгружаются кнопкой.
@@ -192,6 +197,7 @@ export function mergeMessages(messages, mode) {
   if(mode === 'initial' || mode === 'new') messages.forEach(message => {state.rev = Math.max(state.rev, message.rev || 0);});
   renderMessages(mode);
   if(state.reply || state.editing) renderContext();
+  if(mode === 'sent') sent();
   if(fresh) {if(document.hidden) document.title = 'Новое сообщение · Маяк'; else ping();}
   markRead();
 }

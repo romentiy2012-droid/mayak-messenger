@@ -58,7 +58,7 @@ test('owner can delete any message and remove a member; others cannot',async()=>
  await assert.rejects(db.query("select public.mayak_react($1,'👍')",[ownerMessage]));
  // Вернуться можно по новому приглашению.
  await join(guest,'Гость снова');
- assert.equal((await db.query('select * from public.mayak_messages')).rows.length,3);
+ assert.equal((await db.query("select * from public.mayak_messages where kind<>'system'")).rows.length,3);
  await db.exec('reset role; set role anon;');
  await assert.rejects(db.query('select public.mayak_kick($1)',[third]));
  await db.close();

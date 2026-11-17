@@ -42,7 +42,7 @@ test('photo and voice messages: own files only, safe metadata, no editing, delet
  assert.equal((await one('select public.mayak_push_claim($1) as job',[voice.id])).job.body,'🎤 Голосовое сообщение');
  // Гость видит вложения, но удалить чужое не может; автор удаляет — файл из сообщения пропадает.
  await as(guest);
- assert.equal((await db.query("select 1 from public.mayak_messages where kind<>'text'")).rows.length,3);
+ assert.equal((await db.query("select 1 from public.mayak_messages where kind in ('photo','voice')")).rows.length,3);
  await assert.rejects(db.query('select public.mayak_delete($1)',[photo.id]));
  await as(owner);
  const gone=await one('select (m).file as file,(m).file_meta as meta,(m).text as text,(m).deleted as deleted,(m).kind as kind from public.mayak_delete($1) m',[photo.id]);

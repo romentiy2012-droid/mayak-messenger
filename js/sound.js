@@ -8,6 +8,17 @@ export function unlockAudio() {
   if(!Context) return;
   try {if(!audio) audio = new Context(); if(audio.state === 'suspended') audio.resume().catch(() => {});} catch(_error) {}
 }
+// Тихий «пуф» при отправке: короткий падающий тон, ниже и мягче входящего сигнала.
+export function sent() {
+  if(prefs.get('sound','1') !== '1') return;
+  try {
+    if(!audio || audio.state !== 'running') return;
+    const start = audio.currentTime, tone = audio.createOscillator(), gain = audio.createGain();
+    tone.type = 'sine'; tone.frequency.setValueAtTime(660, start); tone.frequency.exponentialRampToValueAtTime(440, start + .12);
+    gain.gain.setValueAtTime(.0001, start); gain.gain.exponentialRampToValueAtTime(.09, start + .015); gain.gain.exponentialRampToValueAtTime(.0001, start + .16);
+    tone.connect(gain); gain.connect(audio.destination); tone.start(start); tone.stop(start + .18);
+  } catch(_error) {}
+}
 export function ping() {
   if(prefs.get('sound','1') !== '1') return;
   try {
