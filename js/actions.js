@@ -14,7 +14,13 @@ function firstSymbol(text) {
   if(window.Intl && Intl.Segmenter) {const part = new Intl.Segmenter('ru', {granularity:'grapheme'}).segment(value)[Symbol.iterator]().next(); return part.done ? '' : part.value.segment;}
   return Array.from(value)[0];
 }
-let sheetOpened = 0, press = null, scrollQueued = false;
+let sheetOpened = 0, press = null, scrollQueued = false, videoClick = null;
+function cancelPress() {
+  if(!press) return;
+  clearTimeout(press.timer);
+  if(press.swipe) press.bubble.style.transform = '';
+  press = null;
+}
 
 // keep=true — поставить выбранный смайл, даже если он уже стоит (иначе повторное нажатие снимает реакцию).
 async function react(id, emoji, keep) {
@@ -92,6 +98,14 @@ export function initActions() {
   $('jump-button').addEventListener('click', () => {scrollBottom(); markRead();});
   $('messages-scroll').addEventListener('scroll', () => {if(scrollQueued) return; scrollQueued = true; requestAnimationFrame(() => {scrollQueued = false; markRead();});}, {passive:true});
   $('sheet-layer').addEventListener('click', event => {if(event.target === $('sheet-layer') && Date.now() - sheetOpened > 450) closeSheet();});
+  // Плеер слушает click на самой кнопке: гасим клик после жеста до его обработчика.
+  list.addEventListener('click', event => {
+    const video = event.target.closest('.video-note');
+    if(videoClick && Date.now() > videoClick.until) videoClick = null;
+    if(video && videoClick && rowId(video) === videoClick.id && event.detail !== 0) {
+      videoClick = null; event.preventDefault(); event.stopImmediatePropagation();
+    }
+  }, true);
   // Нажатие на цитату, реакцию и «⋯»; правая кнопка мыши; долгое нажатие и смахивание влево на телефоне.
   list.addEventListener('click', event => {
     const quote = event.target.closest('[data-jump]'); if(quote) {jumpTo(Number(quote.dataset.jump)); return;}
@@ -108,19 +122,23 @@ export function initActions() {
   });
   list.addEventListener('touchstart', event => {
     const bubble = event.target.closest('.message-bubble');
-    press = null;
-    if(!bubble || event.touches.length !== 1 || event.target.closest('button,a')) return;
+    cancelPress();
+    videoClick = null; // новое касание — уже отдельное нажатие, воспроизведение снова доступно
+    const control = event.target.closest('button,a');
+    if(!bubble || event.touches.length !== 1 || (control && !control.matches('.video-note'))) return;
     const row = bubble.closest('.message-row');
     if(row.classList.contains('deleted')) return;
-    const touch = event.touches[0], current = {id:Number(row.dataset.id), bubble, x:touch.clientX, y:touch.clientY, dx:0, fired:false, swipe:false, timer:0};
+    const touch = event.touches[0], current = {id:Number(row.dataset.id), bubble, video:!!control, x:touch.clientX, y:touch.clientY, dx:0, fired:false, swipe:false, timer:0};
     current.timer = setTimeout(() => {if(press === current && !current.swipe) {current.fired = true; if(navigator.vibrate) navigator.vibrate(15); openSheet(current.id);}}, 450);
     press = current;
   }, {passive:true});
   list.addEventListener('touchmove', event => {
-    if(!press || press.fired) return;
+    if(!press) return;
+    if(event.touches.length !== 1) {cancelPress(); return;}
+    if(press.fired) return;
     const touch = event.touches[0], dx = touch.clientX - press.x, dy = touch.clientY - press.y;
     if(!press.swipe) {
-      if(Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {clearTimeout(press.timer); press = null; return;}
+      if(Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {cancelPress(); return;}
       if(Math.abs(dx) <= 10) return;
       clearTimeout(press.timer); press.swipe = true;
     }
@@ -135,7 +153,10 @@ export function initActions() {
       setTimeout(() => {current.bubble.style.transition = '';}, 200);
       if(event.type === 'touchend' && current.dx <= -56) startReply(current.id);
     }
-    if(current.fired && event.cancelable) event.preventDefault(); // палец ещё на экране: не нажимать то, что под ним
+    if(current.fired || current.swipe) {
+      if(current.video) videoClick = {id:current.id, until:Date.now() + 900};
+    }
+    if(current.fired && event.cancelable) event.preventDefault(); // не нажимать то, что под пальцем при открытии меню
   };
   list.addEventListener('touchend', endPress);
   list.addEventListener('touchcancel', endPress);

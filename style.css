@@ -35,6 +35,7 @@
 .message-more{display:none;border:0;background:none;color:#9aa89c;font-size:18px;line-height:1;min-width:30px;min-height:30px;border-radius:8px;align-self:center;opacity:0}
 .message-row.own .message-more{order:-1}
 @media(hover:hover){.message-more{display:block}.message-row:hover .message-more,.message-more:focus-visible{opacity:1}.message-more:hover{background:#eef3ea}}
+@media(hover:none){.video-row .message-more{display:block;opacity:1;min-width:40px;min-height:44px}}
 .message-row.flash .message-bubble{animation:mayak-flash 1.3s}
 @keyframes mayak-flash{0%,55%{box-shadow:0 0 0 3px #69b69d}100%{box-shadow:0 0 0 3px #69b69d00}}
 .network-status.typing{color:var(--green)}
