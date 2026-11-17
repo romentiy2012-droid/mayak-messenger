@@ -10,9 +10,10 @@ import {mergeMessages, markRead, connection} from './js/messages.js';
 import {initComposer} from './js/composer.js';
 import {initActions} from './js/actions.js';
 import {initDialogs} from './js/dialogs.js';
+import {initInstall} from './js/install.js';
 import {showChat, showJoin, renderJoin, poll, boot} from './js/session.js';
 
-initComposer(); initActions(); initDialogs();
+initComposer(); initActions(); initDialogs(); initInstall();
 
 $('join-form').addEventListener('submit', async event => {
   event.preventDefault(); $('join-error').textContent = ''; $('join-button').disabled = true;

@@ -8,7 +8,10 @@ export const pushFlags = {
 };
 export function pushSupported() {return !!pushKey && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;}
 function base64Url(buffer) {let raw = ''; new Uint8Array(buffer).forEach(byte => {raw += String.fromCharCode(byte);}); return btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-export function pushBanner() {$('push-banner').hidden = !(state.user && pushSupported() && Notification.permission === 'default' && !pushFlags.get('off') && !pushFlags.get('later'));}
+export function pushBanner() {
+  $('push-banner').hidden = !(state.user && pushSupported() && Notification.permission === 'default' && !pushFlags.get('off') && !pushFlags.get('later'));
+  document.dispatchEvent(new Event('mayak-banners')); // полоса установки показывается, когда эта скрыта
+}
 export async function pushActive() {
   if(!pushSupported() || Notification.permission !== 'granted' || pushFlags.get('off')) return false;
   const registration = await navigator.serviceWorker.ready;

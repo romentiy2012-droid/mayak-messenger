@@ -52,7 +52,7 @@ export function showJoin(forget) {
   clearTyping(); stopVoice(); closeViewer(); resetList(); closeSheet();
   $('people-list').replaceChildren(); $('jump-button').hidden = true;
   try {if(navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});} catch(_error) {}
-  state.user = null; $('chat').hidden = true; $('welcome').hidden = false; $('push-banner').hidden = true;
+  state.user = null; $('chat').hidden = true; $('welcome').hidden = false; $('push-banner').hidden = true; $('install-banner').hidden = true;
   renderJoin(); connection(state.online);
   adjustViewport();
 }

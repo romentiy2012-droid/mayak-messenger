@@ -339,3 +339,8 @@ html[data-theme=dark] .system-note{color:#8c9c93}
 .sheet-layer,.sheet,.sheet *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .sheet input{-webkit-user-select:text;user-select:text}
 .message-row{-webkit-touch-callout:none}
+
+#install-enable{background:var(--green);color:#fff;padding:6px 12px;font-weight:600}
+#install-dismiss{background:none;font-size:19px;line-height:1;min-width:30px;color:#8ba08c}
+html[data-theme=dark] #install-dismiss{color:#7f9085}
+html[data-skin=terminal] #install-enable{background-color:var(--t-fg)!important;color:var(--t-bg)!important;text-shadow:none}
