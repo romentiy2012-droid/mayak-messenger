@@ -29,6 +29,48 @@ const mock=`(()=>{
  },watch(cb){window.pollWatch=cb},stop(){window.pollWatch=null}};
 })();`;
 
+// The iOS keyboard shrinks/shifts visualViewport without resizing the layout viewport.
+async function checkDialogKeyboard(page){
+ await page.evaluate(()=>{
+  const view=window.visualViewport,original={height:view.height,offsetTop:view.offsetTop};
+  window.keyboardTest={height:view.height,offsetTop:0,original};
+  Object.defineProperties(view,{height:{configurable:true,get:()=>window.keyboardTest.height},offsetTop:{configurable:true,get:()=>window.keyboardTest.offsetTop}});
+ });
+ const viewport=async(height,offsetTop=0,event=true)=>page.evaluate(({height,offsetTop,event})=>{Object.assign(window.keyboardTest,{height,offsetTop});if(event)visualViewport.dispatchEvent(new Event('resize'));},{height,offsetTop,event});
+ const visible=async locator=>expect.poll(()=>locator.evaluate(node=>{const r=node.getBoundingClientRect(),card=node.closest('.dialog-card').getBoundingClientRect(),v=visualViewport;return r.top>=Math.max(card.top,v.offsetTop)+8&&r.bottom<=Math.min(card.bottom,v.offsetTop+v.height)-8;})).toBe(true);
+ for(let i=3;i<=10;i++)await page.getByRole('button',{name:'＋ Вариант ответа'}).tap();
+ const last=page.getByRole('textbox',{name:'Вариант 10',exact:true});await last.fill('Десятый вариант');
+ await viewport(344,38);
+ await expect.poll(()=>page.locator('.dialog-card').evaluate(n=>n.getBoundingClientRect().bottom<=visualViewport.offsetTop+visualViewport.height)).toBe(true);
+ await visible(last);
+ await last.press('End');await last.press('!');await expect(last).toHaveValue('Десятый вариант!');
+ assert.equal(await last.evaluate(n=>n.selectionStart),16);
+ // Next-field navigation does not necessarily cause another viewport event.
+ const first=page.getByRole('textbox',{name:'Вариант 1',exact:true});await first.focus();await visible(first);
+ await first.press('Tab');await page.keyboard.press('Tab');await visible(page.getByRole('textbox',{name:'Вариант 2',exact:true}));
+ await page.getByRole('textbox',{name:'Вопрос опроса'}).focus();await visible(page.getByRole('textbox',{name:'Вопрос опроса'}));
+ await last.focus();await visible(last);
+ await page.evaluate(()=>{window.MayakTheme.setSkin('classic');window.MayakTheme.set('light')});
+ await page.screenshot({path:path.join(root,'test-results/polls-keyboard-light.png'),clip:{x:0,y:38,width:390,height:344}});
+ await page.evaluate(()=>window.MayakTheme.set('dark'));await visible(last);
+ await page.screenshot({path:path.join(root,'test-results/polls-keyboard-dark.png'),clip:{x:0,y:38,width:390,height:344}});
+ await page.evaluate(()=>window.MayakTheme.setSkin('terminal'));await visible(last);
+ await page.screenshot({path:path.join(root,'test-results/polls-keyboard-terminal.png'),clip:{x:0,y:38,width:390,height:344}});
+ // The form can still be scrolled by hand to its settings and submit button.
+ await page.locator('.dialog-card').evaluate(n=>n.scrollTop=n.scrollHeight);
+ await page.waitForTimeout(1700);await visible(page.getByRole('button',{name:'Отправить опрос',exact:true}));
+ // A delayed/silent Safari geometry update is picked up by the viewport watcher.
+ await viewport(300,65,false);await visible(last);
+ // A real layout resize (Android/rotation) also keeps the focused option visible.
+ await page.setViewportSize({width:844,height:390});await viewport(220,0);await visible(last);
+ await page.screenshot({path:path.join(root,'test-results/polls-keyboard-landscape.png'),clip:{x:0,y:0,width:844,height:220}});
+ await last.blur();await page.setViewportSize({width:390,height:844});await viewport(844);
+ await expect.poll(()=>page.locator('.dialog-card').evaluate(n=>n.clientHeight>500)).toBe(true);
+ for(let i=10;i>=3;i--)await page.getByRole('button',{name:'Убрать вариант '+i,exact:true}).tap();
+ await expect(first).toHaveValue('Чай');await expect(page.getByRole('textbox',{name:'Вариант 2',exact:true})).toHaveValue('Кофе');
+ await page.evaluate(()=>{delete visualViewport.height;delete visualViewport.offsetTop;delete window.keyboardTest;visualViewport.dispatchEvent(new Event('resize'));window.MayakTheme.setSkin('terminal')});
+}
+
 test('poll UI: create/retry, single/multi choice, privacy, close, drafts and mobile/desktop', {timeout:90000},async()=>{
  const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
  const server=http.createServer((req,res)=>{const relative=decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1)||'index.html',file=path.resolve(root,relative);if(!file.startsWith(root+path.sep)||!mime[path.extname(file)]||!fs.existsSync(file)){res.writeHead(404).end();return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)],'Cache-Control':'no-store'});fs.createReadStream(file).pipe(res)});
@@ -51,6 +93,7 @@ test('poll UI: create/retry, single/multi choice, privacy, close, drafts and mob
   const editor=async()=>{await page.locator('#attach-button').tap();await page.getByRole('button',{name:'Опрос',exact:true}).tap();await expect(page.getByRole('heading',{name:'Новый опрос'})).toBeVisible()};
   await editor();await page.getByRole('textbox',{name:'Вопрос опроса'}).fill('Чай или кофе?');await page.getByRole('textbox',{name:'Вариант 1',exact:true}).fill('Чай');await page.getByRole('textbox',{name:'Вариант 2',exact:true}).fill('Кофе');
   await page.getByRole('button',{name:'＋ Вариант ответа'}).tap();await page.getByRole('textbox',{name:'Вариант 3',exact:true}).fill('Вода');await page.getByRole('button',{name:'Убрать вариант 3',exact:true}).tap();
+  await checkDialogKeyboard(page);
   await page.screenshot({path:path.join(root,'test-results/polls-editor-mobile.png'),fullPage:true});await page.locator('#dialog-close').tap();await editor();await expect(page.getByRole('textbox',{name:'Вопрос опроса'})).toHaveValue('Чай или кофе?');
   await page.evaluate(()=>window.pollTest.loseCreate=true);await page.getByRole('button',{name:'Отправить опрос',exact:true}).tap();await expect(page.getByRole('button',{name:'Повторить отправку',exact:true})).toBeEnabled();await expect(page.getByRole('textbox',{name:'Вопрос опроса'})).toBeDisabled();
   await page.reload();await editor();await expect(page.getByRole('button',{name:'Повторить отправку',exact:true})).toBeVisible();await page.getByRole('button',{name:'Повторить отправку',exact:true}).tap();await expect(page.locator('#dialog-layer')).toBeHidden();await expect(page.locator('.poll-question').filter({hasText:'Чай или кофе?'})).toHaveCount(1);await expect(page.locator('#message-input')).toHaveValue('Сохранить мой текст');
