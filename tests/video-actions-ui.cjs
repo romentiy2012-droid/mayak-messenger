@@ -151,6 +151,59 @@ test('received video: touch playback, reactions, reply, swipe, cancellation and 
   await desktopPage.keyboard.press('Escape');await expect(desktopPage.locator('#sheet-layer')).toBeHidden();
   await desktopRow.locator('.message-more').focus();await desktopPage.keyboard.press('Enter');await expect(desktopPage.locator('#sheet-layer')).toBeVisible();
   await desktopPage.getByRole('button',{name:'Ответить',exact:true}).click();await expect(desktopPage.locator('#composer-context')).toBeVisible();assert.deepEqual(await stats(desktopPage),{downloads:0,plays:0});
+  // A remote storage cleanup must stop a playing received circle and preserve its reply parent.
+  const oldVideo=await desktopRow.locator('video').elementHandle();
+  await desktopRow.locator('.video-note').click();await expect(desktopRow.locator('.video-note')).toHaveClass(/playing/);
+  await desktopPage.evaluate(async id=>{
+   const {state}=await import('/js/core.js'),{mergeMessages}=await import('/js/messages.js');
+   const message=state.messages.find(item=>item.id===id);
+   mergeMessages([{...message,file:null,file_meta:{...message.file_meta,removed:true},rev:message.rev+100}], 'new');
+  },VIDEO);
+  await expect(desktopRow.locator('.video-note')).toHaveCount(0);
+  await expect(desktopRow).toContainText('Файл удалён из хранилища');
+  assert.equal(await oldVideo.evaluate(video=>video.paused),true);
+  await expect(desktopPage.locator('#composer-context')).toContainText('Видеокружочек');
+
+  // Removal between loaded data and an asynchronous play request must not start detached video.
+  await desktopPage.evaluate(async({guest,peer})=>{
+   const {mergeMessages}=await import('/js/messages.js');
+   mergeMessages([{id:600,rev:600,user_id:peer,name:'Тестовый собеседник',text:'📹 Видеокружочек',kind:'video',file:'synthetic/pending-play.mp4',file_meta:{duration:12},created:new Date().toISOString(),reactions:{},peer_a:guest,peer_b:peer}], 'new');
+   const video=document.querySelector('[data-id="600"] video'),nativePlay=video.play.bind(video);video.preload='auto';
+   window.pendingPlayFinished=false;
+   video.play=async()=>{await new Promise(resolve=>{window.releasePendingPlay=resolve;});try{return await nativePlay();}finally{window.pendingPlayFinished=true;}};
+  },{guest:GUEST,peer:PEER});
+  const pendingVideo=await desktopPage.locator('[data-id="600"] video').elementHandle();
+  await desktopPage.locator('[data-id="600"] .video-note').click();
+  await desktopPage.waitForFunction(()=>typeof window.releasePendingPlay==='function'&&document.querySelector('[data-id="600"] video').readyState>=2);
+  await desktopPage.evaluate(async()=>{
+   const {state}=await import('/js/core.js'),{mergeMessages}=await import('/js/messages.js');const message=state.messages.find(item=>item.id===600);
+   mergeMessages([{...message,file:null,rev:601}], 'new');window.releasePendingPlay();
+  });
+  await desktopPage.waitForFunction(()=>window.pendingPlayFinished);assert.equal(await pendingVideo.evaluate(video=>video.paused),true);
+
+  // Removing a cached photo closes its viewer, evicts cached bytes and keeps the caption.
+  await desktopPage.evaluate(async({guest,peer})=>{
+   const {rememberMedia}=await import('/js/media.js'),{mergeMessages}=await import('/js/messages.js');
+   const canvas=document.createElement('canvas');canvas.width=canvas.height=2;
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+   rememberMedia('synthetic/photo.png',blob);
+   const cache=await caches.open('mayak-media');await cache.put(location.origin+'/__media/synthetic/photo.png',new Response(blob));
+   mergeMessages([{id:500,rev:500,user_id:peer,name:'Тестовый собеседник',text:'Подпись остаётся в чате',kind:'photo',file:'synthetic/photo.png',file_meta:{caption:true,w:2,h:2},created:new Date().toISOString(),reactions:{},peer_a:guest,peer_b:peer}], 'new');
+  },{guest:GUEST,peer:PEER});
+  const photo=desktopPage.locator('[data-id="500"]');await photo.locator('.message-photo').click();await expect(desktopPage.locator('#viewer-layer')).toBeVisible();
+  await desktopPage.evaluate(async()=>{
+   const {state}=await import('/js/core.js'),{mergeMessages}=await import('/js/messages.js');const message=state.messages.find(item=>item.id===500);
+   mergeMessages([{...message,file:null,file_meta:{...message.file_meta,removed:true},rev:501}], 'new');
+  });
+  await expect(desktopPage.locator('#viewer-layer')).toBeHidden();await expect(photo).toContainText('Файл удалён из хранилища');await expect(photo).toContainText('Подпись остаётся в чате');
+  await expect.poll(()=>desktopPage.evaluate(async()=>Boolean(await (await caches.open('mayak-media')).match(location.origin+'/__media/synthetic/photo.png')))).toBe(false);
+  // A download completing after invalidation must not repopulate the cache or yield a new blob URL.
+  assert.equal(await desktopPage.evaluate(async()=>{
+   let finish;window.MayakCloud.download=()=>new Promise(resolve=>{finish=resolve;});
+   const {mediaURL,forgetMedia}=await import('/js/media.js'),pending=mediaURL('synthetic/late.png').then(()=>false,()=>true);
+   while(!finish)await new Promise(resolve=>setTimeout(resolve,0));forgetMedia('synthetic/late.png');finish(new Blob(['synthetic'],{type:'image/png'}));
+   return await pending&&!await (await caches.open('mayak-media')).match(location.origin+'/__media/synthetic/late.png');
+  }),true);
   assert.deepEqual(errors,[]);
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(temporary,{recursive:true,force:true});}
 });

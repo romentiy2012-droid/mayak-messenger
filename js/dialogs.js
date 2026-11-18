@@ -5,6 +5,7 @@ import {pushSupported, pushActive, pushEnable, pushDisable} from './push.js';
 import {unlockAudio, ping} from './sound.js';
 import {poll, showJoin} from './session.js';
 import {chatList, openRoom, lastSeen} from './messages.js';
+import {storageWindow} from './storage.js';
 
 let previousFocus = null, cleanup = null, saving = false;
 function dialog(title) {
@@ -115,6 +116,7 @@ function aboutDialog() {
   content.appendChild(button('Установить приложение', installApp));
   content.appendChild(button(state.user.owner ? 'Профиль, участники и пароли' : 'Профиль и участники', profileDialog));
   if(state.user.owner) content.appendChild(button('Пригласить друзей', inviteDialog));
+  if(state.user.owner) content.appendChild(button('Хранилище и лимиты', () => {if(!state.user?.owner)return;const content=dialog('Хранилище и лимиты');cleanup=storageWindow(content);}));
   if(pushSupported()) {
     const toggle = button('Уведомления…', async () => {
       toggle.disabled = true;
@@ -144,7 +146,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.11.3 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.12.0 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
@@ -164,7 +166,7 @@ export function initDialogs() {
     if($('dialog-layer').hidden) return;
     if(event.key === 'Escape') closeDialog();
     if(event.key === 'Tab') {
-      const nodes = $('dialog-layer').querySelectorAll('button:not([disabled]),input,a[href]'); const first = nodes[0], last = nodes[nodes.length - 1];
+      const nodes = Array.from($('dialog-layer').querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')).filter(node=>!node.hidden&&node.getClientRects().length); const first = nodes[0], last = nodes[nodes.length - 1];
       if(event.shiftKey && document.activeElement === first) {last.focus(); event.preventDefault();}
       else if(!event.shiftKey && document.activeElement === last) {first.focus(); event.preventDefault();}
     }

@@ -6,18 +6,21 @@ import {mergeMessages} from './messages.js';
 // Файл скачивается один раз и остаётся на устройстве (Cache Storage), чтобы не тянуть его при каждом открытии.
 const urls = new Map(), ready = new Map(); // ready — уже загруженные адреса: нужны, чтобы запустить звук прямо в момент нажатия
 const cacheKey = path => location.origin + '/__media/' + path;
-async function loadBlob(path) {
+async function loadBlob(path, isCurrent) {
   let store = null;
   try {store = 'caches' in window ? await caches.open('mayak-media') : null;} catch(_error) {store = null;}
   if(store) {const hit = await store.match(cacheKey(path)).catch(() => null); if(hit) return hit.blob();}
   const blob = await window.MayakCloud.download(path);
-  if(store) store.put(cacheKey(path), new Response(blob, {headers:{'Content-Type':blob.type || 'application/octet-stream'}})).catch(() => {});
+  if(store && isCurrent()) {
+    await store.put(cacheKey(path), new Response(blob, {headers:{'Content-Type':blob.type || 'application/octet-stream'}})).catch(() => {});
+    if(!isCurrent()) await store.delete(cacheKey(path)).catch(() => {});
+  }
   return blob;
 }
 export function mediaURL(path) {
   if(!urls.has(path)) {
-    const pending = loadBlob(path).then(blob => {const url = URL.createObjectURL(blob); ready.set(path, url); return url;});
-    pending.catch(() => urls.delete(path)); // не удалось — в следующий раз попробуем снова
+    const pending = loadBlob(path, () => urls.get(path) === pending).then(blob => {if(urls.get(path) !== pending) throw new Error('Файл удалён из хранилища'); const url = URL.createObjectURL(blob); ready.set(path, url); return url;});
+    pending.catch(() => {if(urls.get(path) === pending) urls.delete(path);}); // не удалять более новую загрузку
     urls.set(path, pending);
   }
   return urls.get(path);
@@ -25,6 +28,8 @@ export function mediaURL(path) {
 // Только что отправленный файл уже есть на устройстве — показываем его без скачивания.
 export function rememberMedia(path, blob) {const url = URL.createObjectURL(blob); ready.set(path, url); urls.set(path, Promise.resolve(url));}
 export function forgetMedia(path) {
+  if(player.id && state.messages.some(message => message.id === player.id && message.file === path)) reset();
+  const old = urls.get(path); if(old) old.then(URL.revokeObjectURL).catch(() => {});
   urls.delete(path); ready.delete(path);
   if('caches' in window) caches.open('mayak-media').then(store => store.delete(cacheKey(path))).catch(() => {});
 }
@@ -74,7 +79,7 @@ export function photoNode(message) {
 export function openViewer(id) {
   const message = state.messages.find(item => item.id === id);
   if(!message || !message.file) return;
-  mediaURL(message.file).then(url => {$('viewer-image').src = url; $('viewer-layer').hidden = false;}).catch(() => {});
+  mediaURL(message.file).then(url => {if(!state.messages.some(current => current.id === id && current.file === message.file && !current.deleted)) return; $('viewer-image').src = url; $('viewer-layer').hidden = false;}).catch(() => {});
 }
 export function closeViewer() {$('viewer-layer').hidden = true; $('viewer-image').removeAttribute('src');}
 

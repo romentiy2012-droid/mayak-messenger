@@ -9,3 +9,7 @@ verify_jwt = false
 # JWT проверяется через Auth API в самой функции; запись разрешает RPC участника.
 [functions.video]
 verify_jwt = false
+
+# Проверяет JWT через Auth API и актуальную роль владельца; RPC доступны только service_role.
+[functions.storage-admin]
+verify_jwt = false

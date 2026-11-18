@@ -83,31 +83,34 @@ export async function recordVideo(onSend){
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&capture){cancelVideoRecording();toast('Запись закрыта при уходе из приложения.');}});
 
-const urls=new Map();let playing=null;
-export function stopVideo(){if(playing){playing.pause();playing=null;}}
+const urls=new Map();let playing=null,playingFile=null;
+export function stopVideo(){if(playing){playing.pause();playing=null;}playingFile=null;}
 export function resetVideos(){cancelVideoRecording();stopVideo();urls.forEach(p=>p.then(URL.revokeObjectURL).catch(()=>{}));urls.clear();}
-export function forgetVideo(path){const old=urls.get(path);if(old)old.then(URL.revokeObjectURL).catch(()=>{});urls.delete(path);}
+export function forgetVideo(path){if(playingFile===path)stopVideo();const old=urls.get(path);if(old)old.then(URL.revokeObjectURL).catch(()=>{});urls.delete(path);}
 function videoURL(path){
- if(!urls.has(path)){const pending=window.MayakCloud.videoDownload(path).then(blob=>URL.createObjectURL(blob));urls.set(path,pending);pending.catch(()=>urls.delete(path));}
+ if(!urls.has(path)){const pending=window.MayakCloud.videoDownload(path).then(blob=>{if(urls.get(path)!==pending)throw new Error('Файл удалён из хранилища');return URL.createObjectURL(blob);});urls.set(path,pending);pending.catch(()=>{if(urls.get(path)===pending)urls.delete(path);});}
  return urls.get(path);
 }
 export function videoNode(message){
  const box=element('div','message-video'),toggle=element('button','video-note');toggle.type='button';toggle.setAttribute('aria-label','Смотреть видеокружочек');
  const video=element('video');video.playsInline=true;video.setAttribute('playsinline','');video.preload='none';
+ const current=()=>toggle.isConnected&&state.messages.some(item=>item.id===message.id&&item.file===message.file&&!item.deleted);
+ const discard=()=>{video.pause();video.removeAttribute('src');video.load();};
  const icon=element('span','video-note-icon','▶'),time=element('span','video-note-time',clock(message.file_meta?.duration));
  toggle.append(video,icon,time);box.appendChild(toggle);
- video.addEventListener('play',()=>{stopVoice();if(playing&&playing!==video)playing.pause();playing=video;toggle.classList.add('playing');toggle.setAttribute('aria-label','Приостановить видеокружочек');});
+ video.addEventListener('play',()=>{if(!current()){discard();return;}stopVoice();if(playing&&playing!==video)playing.pause();playing=video;playingFile=message.file;toggle.classList.add('playing');toggle.setAttribute('aria-label','Приостановить видеокружочек');});
  const paint=()=>{toggle.classList.remove('playing');toggle.setAttribute('aria-label','Смотреть видеокружочек');};
  video.addEventListener('pause',paint);video.addEventListener('ended',()=>{paint();video.currentTime=0;time.textContent=clock(message.file_meta?.duration);});
  video.addEventListener('timeupdate',()=>{if(!video.paused)time.textContent=clock(Math.max(0,(video.duration||message.file_meta?.duration||0)-video.currentTime));});
  video.addEventListener('error',()=>{icon.textContent='↻';paint();toggle.classList.remove('loading');});
  let loading=false;
  toggle.addEventListener('click',async()=>{
-  if(loading)return;if(!video.paused){video.pause();return;}
+  if(loading||!current())return;if(!video.paused){video.pause();return;}
   try{
    if(!video.src){loading=true;toggle.classList.add('loading');icon.textContent='…';video.src=await videoURL(message.file);icon.textContent='▶';}
-   await video.play();
-  }catch(error){if(error.name==='NotAllowedError')toast('Видео загружено. Нажмите кружочек для просмотра.');else{video.removeAttribute('src');forgetVideo(message.file);toast('Не удалось загрузить видео. Нажмите ещё раз.');}}
+   if(!current()){discard();return;}
+   await video.play();if(!current())discard();
+  }catch(error){if(!current()){discard();return;}if(error.name==='NotAllowedError')toast('Видео загружено. Нажмите кружочек для просмотра.');else{video.removeAttribute('src');forgetVideo(message.file);toast('Не удалось загрузить видео. Нажмите ещё раз.');}}
   finally{loading=false;toggle.classList.remove('loading');}
  });
  return box;

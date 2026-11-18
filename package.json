@@ -1,6 +1,6 @@
 {
   "name": "mayak-messenger",
-  "version": "2.11.3",
+  "version": "2.12.0",
   "description": "Маяк — закрытый облачный PWA-чат",
   "main": "app.js",
   "directories": {
@@ -8,11 +8,12 @@
   },
   "scripts": {
     "build": "esbuild src/supabase-client.js --bundle --format=iife --global-name=MayakSupabase --minify --target=safari15,chrome100 --outfile=vendor/supabase.js",
-    "test": "node --test tests/database.test.cjs tests/push.test.cjs tests/features.test.cjs tests/reliability.test.cjs tests/admin.test.cjs tests/media.test.cjs tests/direct.test.cjs tests/join.test.cjs tests/avatars.test.cjs tests/video.test.cjs tests/video-edge.test.cjs",
+    "test": "node --test tests/database.test.cjs tests/push.test.cjs tests/features.test.cjs tests/reliability.test.cjs tests/admin.test.cjs tests/media.test.cjs tests/direct.test.cjs tests/join.test.cjs tests/avatars.test.cjs tests/video.test.cjs tests/video-edge.test.cjs tests/storage.test.cjs tests/storage-edge.test.cjs tests/storage-adapter.test.cjs",
     "test:ui": "playwright test",
     "test:avatars-ui": "node --test tests/avatars-ui.cjs",
     "test:video-ui": "node --test tests/video-ui.cjs",
     "test:video-actions-ui": "node --test tests/video-actions-ui.cjs",
+    "test:storage-ui": "node --test tests/storage-ui.cjs",
     "test:video-worker": "npm test --prefix video-worker"
   },
   "repository": {

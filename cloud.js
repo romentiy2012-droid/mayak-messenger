@@ -22,9 +22,9 @@
     catch {return email;}
   }
   // Запрос мимо клиента Supabase (служебные функции, проверка связи) с ограничением по времени.
-  async function plain(path,options={}) {
+  async function plain(path,options={},limit=15000) {
     db();
-    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
+    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),limit);
     try{return await fetch(new URL(path,config.supabaseURL),{...options,signal:controller.signal});}
     finally{clearTimeout(timeout);}
   }
@@ -144,6 +144,11 @@
       return {job,message};
     }
     if(route==='video-cancel')return {job:await rpc('video_cancel',{p_id:body.id})};
+    if(route==='storage'){
+      const auth=unwrap(await db().auth.getSession());if(!auth.session)throw fail('Войдите в чат.',401);
+      const response=await plain('/functions/v1/storage-admin',{method:'POST',headers:{'Content-Type':'application/json',apikey:config.supabasePublishableKey,Authorization:'Bearer '+auth.session.access_token},body:JSON.stringify(body)},body.action==='delete'?90000:15000);
+      const result=await response.json().catch(()=>({}));if(!response.ok)throw fail(result.error||'Не удалось получить состояние хранилища.',response.status);return result;
+    }
     if(route==='edit')return {message:await rpc('edit',{p_id:body.id,p_text:body.text})};
     if(route==='delete')return {message:await rpc('delete',{p_id:body.id})};
     if(route==='react')return {message:await rpc('react',{p_id:body.id,p_emoji:body.emoji||null})};

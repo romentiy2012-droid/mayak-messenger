@@ -3,8 +3,8 @@ import {$, state, post, element, avatar, paintAvatar, adminTag, snippet, toast, 
 import {scrollBottom, nearBottom} from './viewport.js';
 import {ping, sent} from './sound.js';
 import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js';
-import {photoNode, voiceNode, stopVoice} from './media.js';
-import {videoNode,stopVideo} from './video.js';
+import {photoNode, voiceNode, stopVoice, forgetMedia, closeViewer} from './media.js';
+import {videoNode,stopVideo,forgetVideo} from './video.js';
 
 const typing = new Map(); // ключ «чат|участник» → таймер
 let readTimer = null, mainName = 'Наш круг';
@@ -111,6 +111,7 @@ function buildRow(message, source, read, admin) {
   if(kind === 'photo' && message.file) bubble.appendChild(photoNode(message));
   if(kind === 'voice' && message.file) bubble.appendChild(voiceNode(message));
   if(kind === 'video' && message.file) {bubble.appendChild(videoNode(message));row.classList.add('video-row');}
+  if(!gone && ['photo','voice','video'].includes(kind) && !message.file) bubble.appendChild(element('p', 'media-removed', 'Файл удалён из хранилища'));
   // У вложения текст — запасной («📷 Фото»); показываем его, только если это подпись.
   if(kind === 'text' || (kind === 'photo' && meta.caption)) {
     const text = element('div', 'message-text');
@@ -181,7 +182,16 @@ export function mergeMessages(messages, mode) {
   let fresh = false;
   messages.forEach(message => {
     const current = known.get(message.id), room = roomOf(message);
-    if(current) {if((message.rev || 0) >= (current.rev || 0)) known.set(message.id, message); return;}
+    if(current) {
+      if((message.rev || 0) >= (current.rev || 0)) {
+        if(current.file && current.file !== message.file) {
+          if(current.kind === 'video') forgetVideo(current.file);
+          else {forgetMedia(current.file); if(current.kind === 'photo') closeViewer();}
+        }
+        known.set(message.id, message);
+      }
+      return;
+    }
     if(mode === 'new' && state.older[room] && oldest[room] && message.id < oldest[room]) return; // изменилось сообщение из ещё не загруженной истории
     known.set(message.id, message);
     if(mode === 'new' && message.user_id !== state.user.id) {setTyping(room, message.user_id, false); if(!message.deleted && message.kind !== 'system') fresh = true;}
