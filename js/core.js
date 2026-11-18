@@ -2,7 +2,14 @@
 import {paintAvatar} from './avatars.js';
 export {paintAvatar} from './avatars.js';
 export const $ = id => document.getElementById(id);
-export const api = (path, options) => window.MayakCloud.api(path, options);
+let mutations = 0;
+export const mutationsPending = () => mutations > 0;
+export const api = (path, options) => {
+  if(!options?.method || ['GET','HEAD'].includes(options.method.toUpperCase())) return window.MayakCloud.api(path, options);
+  mutations++;
+  try {return Promise.resolve(window.MayakCloud.api(path, options)).finally(() => {mutations--;});}
+  catch(error) {mutations--; throw error;}
+};
 export const post = (route, body) => api(route, {method:'POST', body:JSON.stringify(body)});
 export const problem = error => error && error.status ? error.message : 'Нет связи. Попробуйте ещё раз.';
 
@@ -24,7 +31,7 @@ export function roomOf(message) {return !message.peer_a ? MAIN : message.peer_a 
 export function roomPeer() {return state.room === MAIN ? null : state.room;}
 export const prefs = {
   get(name, fallback) {try {const value = localStorage.getItem('mayak.' + name); return value === null ? fallback : value;} catch(_error) {return fallback;}},
-  set(name, value) {try {if(value === null) localStorage.removeItem('mayak.' + name); else localStorage.setItem('mayak.' + name, value);} catch(_error) {}}
+  set(name, value) {try {if(value === null) localStorage.removeItem('mayak.' + name); else localStorage.setItem('mayak.' + name, value); return true;} catch(_error) {return false;}}
 };
 
 export function element(tag, className, text) {

@@ -12,6 +12,7 @@ import {initActions} from './js/actions.js';
 import {initDialogs} from './js/dialogs.js';
 import {initInstall} from './js/install.js';
 import {showChat, showJoin, renderJoin, poll, boot} from './js/session.js';
+import {initUpdates, restoreUpdateContext} from './js/updates.js';
 
 initComposer(); initActions(); initDialogs(); initInstall();
 
@@ -67,5 +68,4 @@ document.addEventListener('visibilitychange', () => {
   if(state.user) {clearNotifications(); markRead(); poll();}
 });
 
-if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
-adjustViewport(); watchViewport(); boot();
+adjustViewport(); watchViewport(); boot().finally(() => {restoreUpdateContext(); initUpdates();});

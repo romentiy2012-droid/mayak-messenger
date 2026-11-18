@@ -6,6 +6,8 @@ import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './m
 import {recordVideo,canRecordVideo,cancelVideoRecording} from './video.js';
 
 let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
+let preparing = 0, choosingPhoto = false;
+export const composerBusy = () => !!(recording || preparing || choosingPhoto || state.sending || state.attachment || state.editing);
 const MAX_RECORDING = 300; // секунд
 function newNonce() {const random = new Uint32Array(4); crypto.getRandomValues(random); return Array.from(random).map(value => value.toString(16)).join('-');}
 
@@ -41,12 +43,13 @@ function clearAttachment() {
   state.attachment = null; renderAttachment(); resizeComposer();
 }
 async function pickPhoto(file) {
+  preparing++;
   try {
     const item = await preparePhoto(file);
     clearAttachment();
     item.preview = URL.createObjectURL(item.blob); state.attachment = item;
     renderAttachment(); resizeComposer();
-  } catch(error) {toast(error.message);}
+  } catch(error) {toast(error.message);} finally {preparing--;}
 }
 function recordTick() {
   if(!recording) return;
@@ -55,8 +58,9 @@ function recordTick() {
   if(seconds >= MAX_RECORDING) endRecording(true);
 }
 async function beginRecording() {
-  if(recording || state.sending) return;
-  try {recording = await startRecording();} catch(error) {toast(error.message); return;}
+  if(recording || preparing || state.sending) return;
+  preparing++;
+  try {recording = await startRecording();} catch(error) {toast(error.message); return;} finally {preparing--;}
   $('message-form').hidden = true; $('record-bar').hidden = false; followViewport(1500);
   recordTick(); recordTimer = setInterval(recordTick, 250);
 }
@@ -65,11 +69,12 @@ async function endRecording(send) {
   $('record-bar').hidden = true; $('message-form').hidden = false; followViewport(2000);
   if(!current) return;
   if(!send) {current.cancel(); return;}
+  preparing++;
   try {
     const item = await current.finish();
     clearAttachment(); state.attachment = item; renderAttachment(); resizeComposer();
     await submit({preventDefault() {}});
-  } catch(error) {toast(error.message);}
+  } catch(error) {toast(error.message);} finally {preparing--;}
 }
 // Полоса над полем ввода: на что отвечаем или что изменяем.
 export function renderContext() {
@@ -112,11 +117,11 @@ export function stopTyping() {if(typingSent && state.user) {typingSent = 0; post
 const draftKey = () => 'draft:' + state.user.id + (state.room === MAIN ? '' : ':' + state.room);
 export function saveDraft() {
   clearTimeout(draftTimer);
-  if(!state.user || state.editing) return;
+  if(!state.user || state.editing) return !state.editing;
   const text = $('message-input').value, reply = state.reply || null;
-  if(!text.trim() && !reply) {prefs.set(draftKey(), null); return;}
+  if(!text.trim() && !reply) return prefs.set(draftKey(), null);
   const nonce = state.draft && state.draft.text === text.trim() && state.draft.reply === reply ? state.draft.nonce : null;
-  prefs.set(draftKey(), JSON.stringify({text, reply, nonce}));
+  return prefs.set(draftKey(), JSON.stringify({text, reply, nonce}));
 }
 export function restoreDraft() {
   const input = $('message-input');
@@ -214,7 +219,9 @@ export function initComposer() {
   $('context-cancel').addEventListener('click', cancelContext);
   $('attach-button').addEventListener('click', () => document.dispatchEvent(new Event('mayak-attachments')));
   document.addEventListener('mayak-poll-sent',()=>{renderContext();saveDraft();});
-  $('photo-input').addEventListener('change', () => {const file = $('photo-input').files[0]; $('photo-input').value = ''; if(file) pickPhoto(file);});
+  $('photo-input').addEventListener('click', () => {choosingPhoto = true;});
+  $('photo-input').addEventListener('cancel', () => {choosingPhoto = false;});
+  $('photo-input').addEventListener('change', () => {choosingPhoto = false; const file = $('photo-input').files[0]; $('photo-input').value = ''; if(file) pickPhoto(file);});
   $('attachment-cancel').addEventListener('click',async()=>{
     const item=state.attachment;if(state.sending)return;
     if(item?.kind==='video'){

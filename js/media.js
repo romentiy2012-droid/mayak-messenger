@@ -142,7 +142,8 @@ export function voiceNode(message) {
   return box;
 }
 // Одновременно играет одно голосовое. Строка сообщения может быть пересоздана, поэтому ищем её заново.
-const player = {audio:null, id:null};
+const player = {audio:null, id:null, loading:false};
+export const voicePlaying = () => !!(player.audio && (player.loading || !player.audio.paused && !player.audio.ended));
 function paint(box) {
   const node = box || $('messages').querySelector('[data-voice="' + player.id + '"]');
   if(!node || !player.audio) return;
@@ -158,7 +159,7 @@ function reset() {
   const node = player.id ? $('messages').querySelector('[data-voice="' + player.id + '"]') : null;
   if(player.audio) {player.audio.pause(); player.audio = null;}
   const message = state.messages.find(item => item.id === player.id);
-  player.id = null;
+  player.id = null; player.loading = false;
   if(node) {
     node.classList.remove('playing'); node.querySelector('.voice-play').textContent = '▶';
     node.querySelector('.voice-bar i').style.width = '0%';
@@ -176,7 +177,7 @@ export async function toggleVoice(id) {
   const message = state.messages.find(item => item.id === id);
   if(!message || !message.file) return;
   // Звук создаётся сразу по нажатию — иначе телефон не разрешит его запустить после загрузки файла.
-  const audio = new Audio(); player.audio = audio; player.id = id;
+  const audio = new Audio(); player.audio = audio; player.id = id; player.loading = true;
   ['play','pause','timeupdate','loadedmetadata'].forEach(type => audio.addEventListener(type, () => {if(player.audio === audio) paint();}));
   audio.addEventListener('ended', () => {if(player.audio === audio) reset();});
   audio.addEventListener('error', () => {if(player.audio === audio) reset();});
@@ -189,4 +190,5 @@ export async function toggleVoice(id) {
     audio.playbackRate = speed(); // некоторые браузеры сбрасывают скорость при запуске
     if(unheard(message)) post('heard', {id}).then(result => {if(result.message && result.message.id) mergeMessages([result.message], 'changed');}).catch(() => {});
   } catch(error) {if(player.audio === audio) reset(); throw new Error('Не удалось проиграть запись.');}
+  finally {if(player.audio === audio) player.loading = false;}
 }
