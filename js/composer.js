@@ -212,7 +212,8 @@ export function initComposer() {
     }
   });
   $('context-cancel').addEventListener('click', cancelContext);
-  $('attach-button').addEventListener('click', () => $('photo-input').click());
+  $('attach-button').addEventListener('click', () => document.dispatchEvent(new Event('mayak-attachments')));
+  document.addEventListener('mayak-poll-sent',()=>{renderContext();saveDraft();});
   $('photo-input').addEventListener('change', () => {const file = $('photo-input').files[0]; $('photo-input').value = ''; if(file) pickPhoto(file);});
   $('attachment-cancel').addEventListener('click',async()=>{
     const item=state.attachment;if(state.sending)return;

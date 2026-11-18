@@ -1,11 +1,12 @@
 // Окна: приглашение, участники и имя, сброс пароля, установка, настройки.
-import {$, api, post, state, prefs, element, button, avatar, paintAvatar, adminTag, toast, copyText, problem} from './core.js';
+import {$, api, post, state, prefs, element, button, avatar, paintAvatar, adminTag, toast, copyText, problem,MAIN,roomPeer} from './core.js';
 import {avatarEditor} from './avatars.js';
 import {pushSupported, pushActive, pushEnable, pushDisable} from './push.js';
 import {unlockAudio, ping} from './sound.js';
 import {poll, showJoin} from './session.js';
-import {chatList, openRoom, lastSeen} from './messages.js';
+import {chatList, openRoom, lastSeen,mergeMessages,roomTitle} from './messages.js';
 import {storageWindow} from './storage.js';
+import {pollEditor} from './polls.js';
 
 let previousFocus = null, cleanup = null, saving = false;
 function dialog(title) {
@@ -15,6 +16,22 @@ function dialog(title) {
   $('dialog-layer').hidden = false; $('dialog-close').focus(); return content;
 }
 export function closeDialog() {if(saving) return; if(cleanup) {cleanup(); cleanup = null;} $('dialog-layer').hidden = true; if(previousFocus && previousFocus.focus) previousFocus.focus();}
+function attachmentDialog(){
+ if(!state.user||state.sending||state.editing)return;
+ const content=dialog('Добавить в чат');
+ content.appendChild(button('Фото',()=>{closeDialog();$('photo-input').click();},'primary-button'));
+ const create=button('Опрос',()=>{
+  const user=state.user.id,room=state.room,reply=state.reply||null,body=dialog('Новый опрос');
+  body.appendChild(element('p','about-note',room===MAIN?'В общий чат':'Лично: '+roomTitle(room)));
+  cleanup=pollEditor(body,{room,peer:roomPeer(),reply,onBusy:value=>{saving=value;},onDone:closeDialog,onSent:message=>{
+   if(state.user?.id!==user)return;
+   if(state.room===room&&state.reply===reply){state.reply=null;document.dispatchEvent(new Event('mayak-poll-sent'));}
+   mergeMessages([message],state.room===room?'sent':'changed');
+  }});
+ },'primary-button');
+ create.disabled=!!state.attachment;content.appendChild(create);
+ if(state.attachment)content.appendChild(element('p','about-note','Перед созданием опроса отправь или убери выбранное вложение.'));
+}
 // Ссылка с кнопками «скопировать» и «отправить».
 function shareLink(content, url, copyLabel, share) {
   content.appendChild(element('div', 'link-field', url));
@@ -146,7 +163,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.12.0 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.13.0 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
@@ -154,6 +171,7 @@ function aboutDialog() {
 }
 
 export function initDialogs() {
+  document.addEventListener('mayak-attachments',attachmentDialog);
   $('invite-button').addEventListener('click', inviteDialog);
   $('profile-button').addEventListener('click', profileDialog);
   $('mobile-profile').addEventListener('click', profileDialog);
@@ -166,7 +184,7 @@ export function initDialogs() {
     if($('dialog-layer').hidden) return;
     if(event.key === 'Escape') closeDialog();
     if(event.key === 'Tab') {
-      const nodes = Array.from($('dialog-layer').querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')).filter(node=>!node.hidden&&node.getClientRects().length); const first = nodes[0], last = nodes[nodes.length - 1];
+      const nodes = Array.from($('dialog-layer').querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href]')).filter(node=>!node.hidden&&node.getClientRects().length); const first = nodes[0], last = nodes[nodes.length - 1];
       if(event.shiftKey && document.activeElement === first) {last.focus(); event.preventDefault();}
       else if(!event.shiftKey && document.activeElement === last) {first.focus(); event.preventDefault();}
     }

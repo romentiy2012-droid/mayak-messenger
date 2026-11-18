@@ -5,6 +5,7 @@ import {ping, sent} from './sound.js';
 import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js';
 import {photoNode, voiceNode, stopVoice, forgetMedia, closeViewer} from './media.js';
 import {videoNode,stopVideo,forgetVideo} from './video.js';
+import {pollNode,resetPolls} from './polls.js';
 
 const typing = new Map(); // ключ «чат|участник» → таймер
 let readTimer = null, mainName = 'Наш круг';
@@ -87,7 +88,7 @@ function textWithLinks(node, text) {
 // Лента обновляется по частям: строка сообщения пересоздаётся, только если изменилось то, что в ней видно.
 // Остальные остаются на месте, поэтому жест или выделение на них не прерывается.
 const rows = new Map(), dividers = new Map();
-export function resetList() {rows.clear(); dividers.clear(); $('messages').replaceChildren();}
+export function resetList() {resetPolls();rows.clear(); dividers.clear(); $('messages').replaceChildren();}
 function isOwner(id) {return !!id && state.people.some(person => person.id === id && person.owner);}
 function buildRow(message, source, read, admin) {
   // Служебная строка («Имя добавлен в чат») — по центру, как разделитель дня, без автора и действий.
@@ -108,6 +109,7 @@ function buildRow(message, source, read, admin) {
     bubble.appendChild(quote);
   }
   const kind = gone ? 'text' : (message.kind || 'text'), meta = message.file_meta || {};
+  if(kind === 'poll') {bubble.appendChild(pollNode(message,updated=>mergeMessages([updated],'changed')));row.classList.add('poll-row');}
   if(kind === 'photo' && message.file) bubble.appendChild(photoNode(message));
   if(kind === 'voice' && message.file) bubble.appendChild(voiceNode(message));
   if(kind === 'video' && message.file) {bubble.appendChild(videoNode(message));row.classList.add('video-row');}

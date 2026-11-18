@@ -50,7 +50,7 @@
     if(result.error){
       const e=result.error;
       const messages={'Invalid login credentials':'Неверное имя или пароль.','Email not confirmed':'Владельцу нужно отключить подтверждение почты (Confirm email) в Supabase.','User already registered':'Такое имя уже зарегистрировано. Выберите «Вход».','Email rate limit exceeded':'Слишком много попыток. Попробуйте позже.'};
-      throw fail(messages[e.message]||e.message,e.status||(['42501','PGRST301'].includes(e.code)?403:400));
+      throw Object.assign(fail(messages[e.message]||e.message,e.status||(['42501','PGRST301'].includes(e.code)?403:400)),{code:e.code});
     }
     return result.data;
   }
@@ -133,6 +133,10 @@
     }
     if(route==='messages' && options.method==='POST')return {message:await rpc('post_to',{p_peer:body.peer||null,p_text:body.text,p_nonce:body.nonce,p_reply:body.reply||null})};
     if(route==='attach')return {message:await rpc('attach_to',{p_peer:body.peer||null,p_kind:body.kind,p_file:body.file,p_meta:body.meta||{},p_text:body.text||'',p_nonce:body.nonce,p_reply:body.reply||null})};
+    if(route==='poll-create')return rpc('poll_create',{p_question:body.question,p_options:body.options,p_multiple:body.multiple,p_anonymous:body.anonymous,p_nonce:body.nonce,p_peer:body.peer||null,p_reply:body.reply||null});
+    if(route==='poll-get')return rpc('poll_get',{p_id:body.id,p_voters:body.voters===true});
+    if(route==='poll-vote')return rpc('poll_vote',{p_id:body.id,p_choices:body.choices,p_nonce:body.nonce});
+    if(route==='poll-close')return rpc('poll_close',{p_id:body.id});
     if(route==='video-start'){
       const auth=unwrap(await db().auth.getSession());if(!auth.session)throw fail('Войдите в чат.',401);
       const response=await plain('/functions/v1/video',{method:'POST',headers:{'Content-Type':'application/json',apikey:config.supabasePublishableKey,Authorization:'Bearer '+auth.session.access_token},body:JSON.stringify(body)});
