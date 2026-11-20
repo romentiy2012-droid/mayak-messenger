@@ -1,6 +1,7 @@
 // Реальный жизненный цикл Service Worker и перезагрузки Chrome; только синтетическое облако.
 const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path');
 const {chromium,expect}=require('@playwright/test'),root=path.resolve(__dirname,'..');
+const sourceVersion = require('../package.json').version;
 const USER='00000000-0000-4000-8000-000000000001',PEER='00000000-0000-4000-8000-000000000002';
 async function clientVersion(page){try{return await page.evaluate(async()=>(await import('/js/updates.js')).APP_VERSION);}catch(error){if(/Execution context was destroyed/.test(error.message))return 'navigating';throw error;}}
 const mock=`(()=>{
@@ -23,7 +24,7 @@ async function fixture(clock=false){
   if(release.broken&&relative==='js/updates.js'){res.writeHead(503).end();return;}
   if(relative==='sw.js')release.swRequests++;
   let body=relative==='cloud.js'?Buffer.from(mock):fs.readFileSync(file);
-  if(['.js','.html'].includes(path.extname(file)))body=Buffer.from(body.toString().replaceAll('2.14.0',relative==='sw.js'?release.worker:release.client));
+  if(['.js','.html'].includes(path.extname(file)))body=Buffer.from(body.toString().replaceAll(sourceVersion,relative==='sw.js'?release.worker:release.client));
   res.writeHead(200,{'Content-Type':mime[path.extname(file)],'Cache-Control':'no-store'});res.end(body);
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

@@ -1,6 +1,7 @@
 // Фото и голосовые: подготовка к отправке, загрузка из хранилища, показ и проигрывание.
 import {$, state, element, prefs, post} from './core.js';
 import {mergeMessages} from './messages.js';
+import {analyseVoice} from './voice-timing.js';
 
 // ===== Файлы из хранилища =====
 // Файл скачивается один раз и остаётся на устройстве (Cache Storage), чтобы не тянуть его при каждом открытии.
@@ -19,18 +20,18 @@ async function loadBlob(path, isCurrent) {
 }
 export function mediaURL(path) {
   if(!urls.has(path)) {
-    const pending = loadBlob(path, () => urls.get(path) === pending).then(blob => {if(urls.get(path) !== pending) throw new Error('Файл удалён из хранилища'); const url = URL.createObjectURL(blob); ready.set(path, url); return url;});
+    const pending = loadBlob(path, () => urls.get(path) === pending).then(blob => {if(urls.get(path) !== pending) throw new Error('Файл удалён из хранилища'); const url = URL.createObjectURL(blob); ready.set(path, {url, blob}); return url;});
     pending.catch(() => {if(urls.get(path) === pending) urls.delete(path);}); // не удалять более новую загрузку
     urls.set(path, pending);
   }
   return urls.get(path);
 }
 // Только что отправленный файл уже есть на устройстве — показываем его без скачивания.
-export function rememberMedia(path, blob) {const url = URL.createObjectURL(blob); ready.set(path, url); urls.set(path, Promise.resolve(url));}
+export function rememberMedia(path, blob) {const url = URL.createObjectURL(blob); ready.set(path, {url, blob}); urls.set(path, Promise.resolve(url)); voiceTimings.delete(path);}
 export function forgetMedia(path) {
   if(player.id && state.messages.some(message => message.id === player.id && message.file === path)) reset();
   const old = urls.get(path); if(old) old.then(URL.revokeObjectURL).catch(() => {});
-  urls.delete(path); ready.delete(path);
+  urls.delete(path); ready.delete(path); voiceTimings.delete(path);
   if('caches' in window) caches.open('mayak-media').then(store => store.delete(cacheKey(path))).catch(() => {});
 }
 
@@ -114,7 +115,8 @@ export async function startRecording() {
       const mime = (recorder.mimeType || format[0] || 'audio/webm').split(';')[0];
       const blob = new Blob(chunks, {type:mime});
       if(duration < .7 || !blob.size) throw new Error('Слишком короткая запись.');
-      return {kind:'voice', blob, extension:format[1], meta:{duration:Math.round(duration * 10) / 10, size:blob.size, mime}};
+      const timing = await analyseVoice(blob);
+      return {kind:'voice', blob, extension:format[1], meta:{duration:Math.round((timing?.end || duration) * 10) / 10, size:blob.size, mime}};
     },
     cancel() {try {if(recorder.state !== 'inactive') recorder.stop();} catch(_error) {} release();}
   };
@@ -131,24 +133,56 @@ export function nextSpeed() {
 // Чужое голосовое, которое я ещё не слушал, помечается точкой; после запуска отметка уходит автору («прослушано»).
 const unheard = message => !!state.user && message.user_id !== state.user.id && !(message.heard || []).includes(state.user.id);
 export function voiceNode(message) {
-  const meta = message.file_meta || {};
   const box = element('div', 'message-voice' + (unheard(message) ? ' unheard' : '')); box.dataset.voice = message.id;
   const play = element('button', 'voice-play', '▶'); play.type = 'button'; play.setAttribute('aria-label', 'Слушать голосовое сообщение');
   const bar = element('div', 'voice-bar'); bar.appendChild(element('i'));
   const rate = element('button', 'voice-speed', speedLabel()); rate.type = 'button'; rate.setAttribute('aria-label', 'Скорость воспроизведения');
-  box.appendChild(play); box.appendChild(bar); box.appendChild(element('span', 'voice-time', clock(meta.duration))); box.appendChild(rate);
+  box.appendChild(play); box.appendChild(bar); box.appendChild(element('span', 'voice-time', clock(voiceDuration(message)))); box.appendChild(rate);
   if(player.id === message.id) paint(box);
   mediaURL(message.file).catch(() => {}); // запись маленькая — загружаем заранее, чтобы по нажатию заиграла сразу
   return box;
 }
 // Одновременно играет одно голосовое. Строка сообщения может быть пересоздана, поэтому ищем её заново.
-const player = {audio:null, id:null, loading:false};
+const player = {audio:null, id:null, loading:false, timer:null};
+const voiceTimings = new Map();
+let analysisQueue = Promise.resolve();
+function voiceDuration(message, audio) {
+  const end = voiceTimings.get(message?.file)?.result?.end;
+  if(end > 0) return end;
+  return audio && Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Number(message?.file_meta?.duration) || 0;
+}
+function checkVoiceEnd() {
+  const audio = player.audio, message = state.messages.find(item => item.id === player.id);
+  const end = voiceTimings.get(message?.file)?.result?.end;
+  if(audio && !audio.paused && end > 0 && audio.currentTime >= end) reset();
+  else paint();
+}
+function inspectVoice(path) {
+  if(voiceTimings.has(path)) return voiceTimings.get(path).pending;
+  const entry = {result:null, pending:null}, source = ready.get(path);
+  if(!source) return Promise.resolve(null);
+  // Не декодируем сразу всю историю и не держим несколько PCM-буферов одновременно.
+  entry.pending = analysisQueue = analysisQueue.catch(() => {}).then(async () => {
+    if(ready.get(path) !== source) return;
+    const result = await analyseVoice(source.blob);
+    if(ready.get(path) !== source || voiceTimings.get(path) !== entry) return;
+    entry.result = result;
+    if(player.audio && state.messages.find(item => item.id === player.id)?.file === path) checkVoiceEnd();
+    else for(const message of state.messages.filter(item => item.file === path)) {
+      const node = $('messages').querySelector('[data-voice="' + message.id + '"] .voice-time');
+      if(node) node.textContent = clock(voiceDuration(message));
+    }
+  });
+  if(voiceTimings.size >= 100) voiceTimings.delete(voiceTimings.keys().next().value);
+  voiceTimings.set(path, entry);
+  return entry.pending;
+}
 export const voicePlaying = () => !!(player.audio && (player.loading || !player.audio.paused && !player.audio.ended));
 function paint(box) {
   const node = box || $('messages').querySelector('[data-voice="' + player.id + '"]');
   if(!node || !player.audio) return;
   const message = state.messages.find(item => item.id === player.id);
-  const total = Number.isFinite(player.audio.duration) && player.audio.duration > 0 ? player.audio.duration : Number((message && message.file_meta || {}).duration) || 0;
+  const total = voiceDuration(message, player.audio);
   const playing = !player.audio.paused && !player.audio.ended;
   node.classList.toggle('playing', playing);
   node.querySelector('.voice-play').textContent = playing ? '❚❚' : '▶';
@@ -157,13 +191,14 @@ function paint(box) {
 }
 function reset() {
   const node = player.id ? $('messages').querySelector('[data-voice="' + player.id + '"]') : null;
-  if(player.audio) {player.audio.pause(); player.audio = null;}
+  clearInterval(player.timer); player.timer = null;
+  if(player.audio) {const audio = player.audio; player.audio = null; audio.pause(); audio.removeAttribute('src'); audio.load();}
   const message = state.messages.find(item => item.id === player.id);
   player.id = null; player.loading = false;
   if(node) {
     node.classList.remove('playing'); node.querySelector('.voice-play').textContent = '▶';
     node.querySelector('.voice-bar i').style.width = '0%';
-    node.querySelector('.voice-time').textContent = clock((message && message.file_meta || {}).duration);
+    node.querySelector('.voice-time').textContent = clock(voiceDuration(message));
   }
 }
 export function stopVoice() {reset();}
@@ -178,17 +213,21 @@ export async function toggleVoice(id) {
   if(!message || !message.file) return;
   // Звук создаётся сразу по нажатию — иначе телефон не разрешит его запустить после загрузки файла.
   const audio = new Audio(); player.audio = audio; player.id = id; player.loading = true;
-  ['play','pause','timeupdate','loadedmetadata'].forEach(type => audio.addEventListener(type, () => {if(player.audio === audio) paint();}));
+  ['play','pause','timeupdate','loadedmetadata','durationchange'].forEach(type => audio.addEventListener(type, () => {if(player.audio === audio) checkVoiceEnd();}));
   audio.addEventListener('ended', () => {if(player.audio === audio) reset();});
   audio.addEventListener('error', () => {if(player.audio === audio) reset();});
   try {
     // Телефон разрешает звук только прямо в момент нажатия: если файл уже загружен, запускаем без ожидания.
-    if(ready.has(message.file)) audio.src = ready.get(message.file);
+    if(ready.has(message.file)) audio.src = ready.get(message.file).url;
     else {audio.src = await mediaURL(message.file); if(player.audio !== audio) return;}
     audio.playbackRate = speed();
-    await audio.play();
+    const playing = audio.play(); // остаётся в цепочке нажатия для iPhone
+    inspectVoice(message.file).catch(() => {});
+    player.timer = setInterval(() => {if(player.audio === audio) checkVoiceEnd();}, 100);
+    await playing;
+    if(player.audio !== audio) return;
     audio.playbackRate = speed(); // некоторые браузеры сбрасывают скорость при запуске
     if(unheard(message)) post('heard', {id}).then(result => {if(result.message && result.message.id) mergeMessages([result.message], 'changed');}).catch(() => {});
-  } catch(error) {if(player.audio === audio) reset(); throw new Error('Не удалось проиграть запись.');}
+  } catch(error) {if(player.audio !== audio) return; reset(); throw new Error('Не удалось проиграть запись.');}
   finally {if(player.audio === audio) player.loading = false;}
 }
