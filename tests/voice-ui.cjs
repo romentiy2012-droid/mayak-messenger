@@ -14,7 +14,7 @@ function wav(duration, ranges) {
 }
 const mock = `(() => {
  const now = new Date().toISOString(), user = {id:'00000000-0000-4000-8000-000000000001',name:'Тест',owner:true,last_seen:now};
- const messages = ['tail.wav','pause.wav','wrong.m4a','tail.m4a','fallback.wav'].map((file,i) => ({id:i+1,rev:i+1,kind:'voice',file:'synthetic/'+file,file_meta:{duration:92},user_id:'00000000-0000-4000-8000-000000000002',name:'Собеседник',created:now,reactions:{}}));
+ const messages = ['tail.wav','pause.wav','wrong.m4a','tail.m4a','fallback.wav','timestamp.m4a'].map((file,i) => ({id:i+1,rev:i+1,kind:'voice',file:'synthetic/'+file,file_meta:{duration:92},user_id:'00000000-0000-4000-8000-000000000002',name:'Собеседник',created:now,reactions:{}}));
  window.voiceTest = {downloads:0,heard:0}; window.voiceAudios = [];
  const NativeAudio = window.Audio; window.Audio = function(...args) {const audio = new NativeAudio(...args);window.voiceAudios.push(audio);return audio;};window.Audio.prototype = NativeAudio.prototype;
  window.MayakCloud = {async api(route) {if(route==='session')return {user,room:'Тест'};if(route.startsWith('events'))return {people:[user],messages,reads:[],direct_full:true};if(route==='heard')window.voiceTest.heard++;return {};},watch(){},stop(){},async download(file){window.voiceTest.downloads++;return (await fetch('/'+file)).blob();}};
@@ -22,6 +22,7 @@ const mock = `(() => {
 test('voice playback ends at audio boundary, keeps pauses, replays, falls back and records actual duration', {timeout:60000}, async () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'mayak-voice-'));
   const samples = {'tail.wav':wav(92, [[0, 1]]), 'pause.wav':wav(8, [[0, 1], [6, 8]]), 'fallback.wav':wav(2, [[0, 2]])};
+  const opus = require('./voice-mp4-fixture.cjs')();samples['timestamp.m4a']=opus.broken;
   // Создаём AAC/MP4 с реальным пустым хвостом и MP4 с завышенным movie duration.
   const ffmpeg = require('../video-worker/node_modules/@ffmpeg-installer/ffmpeg').path;
   fs.writeFileSync(path.join(temporary, 'tail.wav'), samples['tail.wav']);
@@ -51,7 +52,7 @@ test('voice playback ends at audio boundary, keeps pauses, replays, falls back a
     await page.goto('http://127.0.0.1:'+server.address().port);await expect(page.locator('#chat')).toBeVisible();
     const row = id => page.locator('[data-voice="'+id+'"]');
     const active = () => page.evaluate(async () => (await import('/js/media.js')).voicePlaying());
-    await expect.poll(() => page.evaluate(() => window.voiceTest.downloads)).toBe(5);
+    await expect.poll(() => page.evaluate(() => window.voiceTest.downloads)).toBe(6);
     // Прежний код продолжает играть 90 секунд тишины; новая граница останавливает за ~1,25 с.
     for(const id of [1, 3, 4]) {
       await row(id).locator('.voice-play').tap();await expect.poll(active).toBe(true);
@@ -71,11 +72,17 @@ test('voice playback ends at audio boundary, keeps pauses, replays, falls back a
     // Если декодер не поддержан, стандартный ended всё ещё завершает воспроизведение.
     await page.evaluate(() => {window.savedOffline=window.OfflineAudioContext;window.OfflineAudioContext=undefined;});
     await row(5).locator('.voice-play').tap();await expect.poll(active).toBe(true);await expect.poll(active,{timeout:5000}).toBe(false);
+    // Главное воспроизведение: Opus/MP4 с84с скачком, без помощи PCM-декодера.
+    await row(6).locator('.voice-play').tap();await expect.poll(active).toBe(true);
+    await page.waitForFunction(()=>Number.isFinite(window.voiceAudios.at(-1)?.duration)&&window.voiceAudios.at(-1).duration>0);
+    const nativeDuration=await page.evaluate(()=>window.voiceAudios.at(-1).duration);
+    assert.ok(Math.abs(nativeDuration-opus.duration)<.1,JSON.stringify({nativeDuration,expected:opus.duration}));
+    await expect.poll(active,{timeout:5000}).toBe(false);
     await page.evaluate(() => window.OfflineAudioContext=window.savedOffline);
     // Переключение на другой плеер и удаление текущего вложения.
     await row(1).locator('.voice-play').tap();await row(2).locator('.voice-play').tap();await expect.poll(active).toBe(true);
     await page.evaluate(async () => (await import('/js/media.js')).forgetMedia('synthetic/pause.wav'));assert.equal(await active(),false);
-    assert.equal(await page.evaluate(() => window.voiceTest.downloads),5);
+    assert.equal(await page.evaluate(() => window.voiceTest.downloads),6);
     // Стенные часы скачут на 90 секунд, звуковая дорожка остаётся ~1,2 секунды.
     const recorded = await page.evaluate(async () => {
       const media = await import('/js/media.js'), recording = await media.startRecording(), realNow = Date.now;
@@ -84,6 +91,6 @@ test('voice playback ends at audio boundary, keeps pauses, replays, falls back a
     });
     assert.ok(recorded.duration > .5 && recorded.duration < 5,JSON.stringify(recorded));
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({recorded,downloads:5,formats:['WAV','AAC/MP4'],silenceTail:90,errors}));
+    console.log(JSON.stringify({recorded,downloads:6,formats:['WAV','AAC/MP4','Opus/MP4'],silenceTail:90,timestampGap:84,nativeOpusDuration:nativeDuration,errors}));
   } finally {if(browser) await browser.close();await new Promise(resolve => server.close(resolve));fs.rmSync(temporary,{recursive:true,force:true});}
 });

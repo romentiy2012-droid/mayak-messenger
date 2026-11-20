@@ -2,6 +2,7 @@
 import {$, state, element, prefs, post} from './core.js';
 import {mergeMessages} from './messages.js';
 import {analyseVoice} from './voice-timing.js';
+import {prepareVoicePlayback} from './voice-mp4.js';
 
 // ===== Файлы из хранилища =====
 // Файл скачивается один раз и остаётся на устройстве (Cache Storage), чтобы не тянуть его при каждом открытии.
@@ -18,9 +19,13 @@ async function loadBlob(path, isCurrent) {
   }
   return blob;
 }
-export function mediaURL(path) {
+export function mediaURL(path, voice = false) {
   if(!urls.has(path)) {
-    const pending = loadBlob(path, () => urls.get(path) === pending).then(blob => {if(urls.get(path) !== pending) throw new Error('Файл удалён из хранилища'); const url = URL.createObjectURL(blob); ready.set(path, {url, blob}); return url;});
+    const pending = loadBlob(path, () => urls.get(path) === pending).then(async blob => {
+      const prepared = voice ? await prepareVoicePlayback(blob) : {blob, duration:null};
+      if(urls.get(path) !== pending) throw new Error('Файл удалён из хранилища');
+      const url = URL.createObjectURL(prepared.blob); ready.set(path, {url, ...prepared}); return url;
+    });
     pending.catch(() => {if(urls.get(path) === pending) urls.delete(path);}); // не удалять более новую загрузку
     urls.set(path, pending);
   }
@@ -89,7 +94,7 @@ export function clock(seconds) {
   const total = Math.max(0, Math.round(seconds || 0));
   return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
 }
-const FORMATS = [['audio/mp4','m4a'], ['audio/webm;codecs=opus','webm'], ['audio/webm','webm'], ['audio/ogg;codecs=opus','ogg']];
+const FORMATS = [['audio/mp4;codecs=mp4a.40.2','m4a'], ['audio/mp4','m4a'], ['audio/webm;codecs=opus','webm'], ['audio/webm','webm'], ['audio/ogg;codecs=opus','ogg']];
 export function canRecord() {return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);}
 // Начинает запись. finish() отдаёт готовое вложение, cancel() отбрасывает запись.
 export async function startRecording() {
@@ -113,10 +118,10 @@ export async function startRecording() {
       if(recorder.state !== 'inactive') recorder.stop();
       await stopped; release();
       const mime = (recorder.mimeType || format[0] || 'audio/webm').split(';')[0];
-      const blob = new Blob(chunks, {type:mime});
+      const prepared = await prepareVoicePlayback(new Blob(chunks, {type:mime})), blob = prepared.blob;
       if(duration < .7 || !blob.size) throw new Error('Слишком короткая запись.');
       const timing = await analyseVoice(blob);
-      return {kind:'voice', blob, extension:format[1], meta:{duration:Math.round((timing?.end || duration) * 10) / 10, size:blob.size, mime}};
+      return {kind:'voice', blob, extension:format[1], meta:{duration:Math.round((timing?.end || prepared.duration || duration) * 10) / 10, size:blob.size, mime}};
     },
     cancel() {try {if(recorder.state !== 'inactive') recorder.stop();} catch(_error) {} release();}
   };
@@ -139,7 +144,7 @@ export function voiceNode(message) {
   const rate = element('button', 'voice-speed', speedLabel()); rate.type = 'button'; rate.setAttribute('aria-label', 'Скорость воспроизведения');
   box.appendChild(play); box.appendChild(bar); box.appendChild(element('span', 'voice-time', clock(voiceDuration(message)))); box.appendChild(rate);
   if(player.id === message.id) paint(box);
-  mediaURL(message.file).catch(() => {}); // запись маленькая — загружаем заранее, чтобы по нажатию заиграла сразу
+  mediaURL(message.file, true).catch(() => {}); // подготовка до нажатия сохраняет запуск звука на iPhone
   return box;
 }
 // Одновременно играет одно голосовое. Строка сообщения может быть пересоздана, поэтому ищем её заново.
@@ -147,13 +152,13 @@ const player = {audio:null, id:null, loading:false, timer:null};
 const voiceTimings = new Map();
 let analysisQueue = Promise.resolve();
 function voiceDuration(message, audio) {
-  const end = voiceTimings.get(message?.file)?.result?.end;
+  const end = voiceTimings.get(message?.file)?.result?.end || ready.get(message?.file)?.duration;
   if(end > 0) return end;
   return audio && Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Number(message?.file_meta?.duration) || 0;
 }
 function checkVoiceEnd() {
   const audio = player.audio, message = state.messages.find(item => item.id === player.id);
-  const end = voiceTimings.get(message?.file)?.result?.end;
+  const end = voiceTimings.get(message?.file)?.result?.end || ready.get(message?.file)?.duration;
   if(audio && !audio.paused && end > 0 && audio.currentTime >= end) reset();
   else paint();
 }
@@ -219,7 +224,7 @@ export async function toggleVoice(id) {
   try {
     // Телефон разрешает звук только прямо в момент нажатия: если файл уже загружен, запускаем без ожидания.
     if(ready.has(message.file)) audio.src = ready.get(message.file).url;
-    else {audio.src = await mediaURL(message.file); if(player.audio !== audio) return;}
+    else {audio.src = await mediaURL(message.file, true); if(player.audio !== audio) return;}
     audio.playbackRate = speed();
     const playing = audio.play(); // остаётся в цепочке нажатия для iPhone
     inspectVoice(message.file).catch(() => {});
