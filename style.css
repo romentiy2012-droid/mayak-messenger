@@ -382,6 +382,16 @@ html[data-skin=terminal] #sheet .sheet-selected.own .message-bubble{background-c
 html[data-skin=terminal] #sheet .sheet-more{background-color:var(--t-panel)!important}
 @keyframes message-menu-in{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
 @media(prefers-reduced-motion:reduce){#sheet{animation:none}#sheet .sheet-emoji{transition:none}}
+
+/* Выбранный Кэпом морской узор: светлый в светлой теме, тёмный в тёмной.
+   Отдельный слой сохраняет цвета сообщений и не прокручивается вместе с историей. */
+.chat-history{position:relative;isolation:isolate;display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;overflow:hidden;background:#f2f5ee}
+.chat-history::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:url('./assets/chat-nautical.png') center/cover no-repeat}
+.chat-history>.messages-scroll{position:relative;z-index:1}
+html[data-theme=dark] .chat-history{background:#131a17}
+html[data-theme=dark] .chat-history::before{filter:invert(1) hue-rotate(180deg);opacity:.62}
+html[data-skin=terminal] .chat-history{background-color:var(--t-bg)!important}
+html[data-skin=terminal] .chat-history::before{opacity:.18}
 .message-row{-webkit-touch-callout:none}
 
 #install-enable{background:var(--green);color:#fff;padding:6px 12px;font-weight:600}
