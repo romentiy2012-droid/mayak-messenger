@@ -1,10 +1,11 @@
 // Действия с сообщением: меню, реакции, удаление, переход к цитате, жесты на телефоне.
-import {$, state, post, problem, toast, button, element, copyText, snippet, MAIN, roomOf} from './core.js';
+import {$, state, post, problem, toast, button, element, copyText, MAIN, roomOf} from './core.js';
 import {messageById, mergeMessages, markRead} from './messages.js';
 import {startReply, startEdit} from './composer.js';
 import {scrollBottom} from './viewport.js';
 import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia, nextSpeed} from './media.js';
 import {stopVideo,forgetVideo} from './video.js';
+import {showMessageMenu, setMessageMenuPanels, hideMessageMenu} from './message-menu.js';
 
 const QUICK = ['👍','❤️','😂','😮','😢','🙏'];
 // Остальные смайлы — по кнопке «＋». Любой другой можно ввести с клавиатуры в поле под ними.
@@ -14,7 +15,7 @@ function firstSymbol(text) {
   if(window.Intl && Intl.Segmenter) {const part = new Intl.Segmenter('ru', {granularity:'grapheme'}).segment(value)[Symbol.iterator]().next(); return part.done ? '' : part.value.segment;}
   return Array.from(value)[0];
 }
-let sheetOpened = 0, press = null, scrollQueued = false, videoClick = null;
+let sheetOpened = 0, press = null, scrollQueued = false, mediaClick = null;
 function cancelPress() {
   if(!press) return;
   clearTimeout(press.timer);
@@ -43,51 +44,65 @@ function jumpTo(id) {
   row.scrollIntoView({block:'center', behavior:'smooth'});
   row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 1400);
 }
-export function closeSheet() {$('sheet-layer').hidden = true; $('sheet').replaceChildren();}
-// Второй экран меню: большой набор смайлов и поле для любого своего.
+export function closeSheet() {hideMessageMenu();}
+const ICONS = {reply:'m9 5-7 7 7 7M2 12h12a7 7 0 0 1 7 7',copy:'M8 8h13v13H8zM16 8V3H3v13h5',edit:'m4 16-1 5 5-1L21 7l-4-4ZM14 6l4 4',trash:'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',close:'m6 6 12 12M6 18 18 6'};
+function menuAction(label, action, icon, danger = false) {
+  const item = button('', action, 'sheet-action' + (danger ? ' danger' : ''));
+  item.appendChild(element('span', '', label));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS(svg.namespaceURI, 'path');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); path.setAttribute('d', ICONS[icon]); svg.appendChild(path); item.appendChild(svg);
+  return item;
+}
+// Палитра раскрывается над выбранным сообщением, без перехода в отдельное окно.
 function emojiSheet(id) {
   const message = messageById(id);
   if(!message || message.deleted) {closeSheet(); return;}
-  const sheet = $('sheet'), mine = (message.reactions || {})[state.user.id];
-  sheet.replaceChildren();
+  const picker = element('div', 'sheet-picker sheet-panel'), mine = (message.reactions || {})[state.user.id];
+  const heading = element('div', 'sheet-picker-heading');
+  heading.append(element('span', '', 'Реакции'), button('⌃', () => openSheet(id, true), 'sheet-collapse'));
+  heading.lastChild.setAttribute('aria-label', 'Свернуть реакции'); picker.appendChild(heading);
   const grid = element('div', 'emoji-grid');
   QUICK.concat(MORE).forEach(emoji => {const item = button(emoji, () => {closeSheet(); react(id, emoji);}, 'sheet-emoji' + (mine === emoji ? ' mine' : '')); item.setAttribute('aria-label', 'Реакция ' + emoji); grid.appendChild(item);});
-  sheet.appendChild(grid);
+  picker.appendChild(grid);
   const form = element('form', 'emoji-own');
   const input = element('input'); input.maxLength = 16; input.placeholder = 'Свой смайл с клавиатуры'; input.setAttribute('aria-label', 'Свой смайл'); input.autocomplete = 'off';
   const send = element('button', 'emoji-own-send', 'Поставить'); send.type = 'submit';
   form.appendChild(input); form.appendChild(send);
   form.addEventListener('submit', event => {event.preventDefault(); const emoji = firstSymbol(input.value); if(!emoji) return; closeSheet(); react(id, emoji, true);});
-  sheet.appendChild(form);
-  sheet.appendChild(button('Отмена', closeSheet, 'sheet-action quiet'));
+  picker.appendChild(form);
+  setMessageMenuPanels(picker, null, true);
   sheetOpened = Date.now();
 }
-function openSheet(id) {
+function openSheet(id, reuse = false) {
   const message = messageById(id);
   if(!state.user || !message || message.deleted) return;
-  const sheet = $('sheet'), mine = (message.reactions || {})[state.user.id];
-  sheet.replaceChildren();
-  const reactions = element('div', 'sheet-reactions');
+  const row = $('messages').querySelector('[data-id="' + id + '"]'); if(!row) return;
+  const user = state.user, room = state.room;
+  if(!reuse) showMessageMenu(row, () => state.user === user && state.room === room && !!messageById(id) && !messageById(id).deleted, closeSheet);
+  const mine = (message.reactions || {})[state.user.id];
+  const reactions = element('div', 'sheet-reactions sheet-panel');
   QUICK.forEach(emoji => {const item = button(emoji, () => {closeSheet(); react(id, emoji);}, 'sheet-emoji' + (mine === emoji ? ' mine' : '')); item.setAttribute('aria-label', 'Реакция ' + emoji); reactions.appendChild(item);});
-  reactions.appendChild(button('＋', () => emojiSheet(id), 'sheet-emoji sheet-more'));
+  reactions.appendChild(button('⌄', () => emojiSheet(id), 'sheet-emoji sheet-more'));
   reactions.lastChild.setAttribute('aria-label', 'Другой смайл');
-  sheet.appendChild(reactions);
-  sheet.appendChild(element('p', 'sheet-preview', message.name + ': ' + snippet(message.text)));
-  sheet.appendChild(button('Ответить', () => {closeSheet(); startReply(id);}, 'sheet-action'));
+  const actions = element('div', 'sheet-actions sheet-panel');
+  actions.appendChild(menuAction('Ответить', () => {closeSheet(); startReply(id);}, 'reply'));
   const kind = message.kind || 'text', plain = kind === 'text';
-  if(plain || (message.file_meta || {}).caption) sheet.appendChild(button('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'sheet-action'));
+  if(plain || (message.file_meta || {}).caption) actions.appendChild(menuAction('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'copy'));
   const own = message.user_id === state.user.id;
-  if(own && plain) sheet.appendChild(button('Изменить', () => {closeSheet(); startEdit(id);}, 'sheet-action'));
+  if(own && plain) actions.appendChild(menuAction('Изменить', () => {closeSheet(); startEdit(id);}, 'edit'));
   // Своё сообщение удаляет автор; любое в общем чате — админ. В личных чатах админских прав нет.
   if(own || (state.user.owner && roomOf(message) === MAIN)) {
-    sheet.appendChild(button(own ? 'Удалить' : 'Удалить (админ)', () => {
-      sheet.replaceChildren(element('p', 'sheet-question', 'Удалить сообщение у всех?'));
-      sheet.appendChild(button('Удалить', () => {closeSheet(); removeMessage(id);}, 'sheet-action danger'));
-      sheet.appendChild(button('Отмена', closeSheet, 'sheet-action quiet'));
-    }, 'sheet-action danger'));
+    actions.appendChild(menuAction(own ? 'Удалить' : 'Удалить (админ)', () => {
+      const confirmation = element('div', 'sheet-actions sheet-panel');
+      confirmation.appendChild(element('p', 'sheet-question', 'Удалить сообщение у всех?'));
+      confirmation.appendChild(menuAction('Удалить', () => {closeSheet(); removeMessage(id);}, 'trash', true));
+      confirmation.appendChild(menuAction('Отмена', closeSheet, 'close'));
+      setMessageMenuPanels(null, confirmation);
+    }, 'trash', true));
   }
-  sheet.appendChild(button('Отмена', closeSheet, 'sheet-action quiet'));
-  sheetOpened = Date.now(); $('sheet-layer').hidden = false;
+  actions.appendChild(menuAction('Отмена', closeSheet, 'close'));
+  setMessageMenuPanels(reactions, actions);
+  sheetOpened = Date.now();
   // Долгое нажатие на телефоне могло начать выделение текста — сбрасываем его.
   try {const selection = window.getSelection(); if(selection) selection.removeAllRanges();} catch(_error) {}
 }
@@ -97,13 +112,13 @@ export function initActions() {
   const rowId = node => Number(node.closest('.message-row').dataset.id);
   $('jump-button').addEventListener('click', () => {scrollBottom(); markRead();});
   $('messages-scroll').addEventListener('scroll', () => {if(scrollQueued) return; scrollQueued = true; requestAnimationFrame(() => {scrollQueued = false; markRead();});}, {passive:true});
-  $('sheet-layer').addEventListener('click', event => {if(event.target === $('sheet-layer') && Date.now() - sheetOpened > 450) closeSheet();});
-  // Плеер слушает click на самой кнопке: гасим клик после жеста до его обработчика.
+  $('sheet-layer').addEventListener('click', event => {if((event.target === $('sheet-layer') || event.target === $('sheet')) && Date.now() - sheetOpened > 450) closeSheet();});
+  // После удержания/смахивания не запускаем медиа совместимым click от webview.
   list.addEventListener('click', event => {
-    const video = event.target.closest('.video-note');
-    if(videoClick && Date.now() > videoClick.until) videoClick = null;
-    if(video && videoClick && rowId(video) === videoClick.id && event.detail !== 0) {
-      videoClick = null; event.preventDefault(); event.stopImmediatePropagation();
+    const media = event.target.closest('.video-note,.voice-play,[data-photo]');
+    if(mediaClick && Date.now() > mediaClick.until) mediaClick = null;
+    if(media && mediaClick && rowId(media) === mediaClick.id && event.detail !== 0) {
+      mediaClick = null; event.preventDefault(); event.stopImmediatePropagation();
     }
   }, true);
   // Нажатие на цитату, реакцию и «⋯»; правая кнопка мыши; долгое нажатие и смахивание влево на телефоне.
@@ -123,19 +138,19 @@ export function initActions() {
   list.addEventListener('touchstart', event => {
     const bubble = event.target.closest('.message-bubble');
     cancelPress();
-    videoClick = null; // новое касание — уже отдельное нажатие, воспроизведение снова доступно
+    mediaClick = null; // новое касание — уже отдельное нажатие, воспроизведение снова доступно
     const control = event.target.closest('button,a');
-    if(!bubble || event.touches.length !== 1 || (control && !control.matches('.video-note'))) return;
+    if(!bubble || event.touches.length !== 1 || (control && !control.matches('.video-note,.voice-play'))) return;
     const row = bubble.closest('.message-row');
     if(row.classList.contains('deleted')) return;
-    const touch = event.touches[0], current = {id:Number(row.dataset.id), bubble, video:!!control, x:touch.clientX, y:touch.clientY, dx:0, fired:false, swipe:false, timer:0};
+    const touch = event.touches[0], current = {id:Number(row.dataset.id), bubble, media:!!event.target.closest('.video-note,.voice-play,[data-photo]'), x:touch.clientX, y:touch.clientY, dx:0, fired:false, swipe:false, timer:0};
     current.timer = setTimeout(() => {if(press === current && !current.swipe) {current.fired = true; if(navigator.vibrate) navigator.vibrate(15); openSheet(current.id);}}, 450);
     press = current;
   }, {passive:true});
   list.addEventListener('touchmove', event => {
     if(!press) return;
     if(event.touches.length !== 1) {cancelPress(); return;}
-    if(press.fired) return;
+    if(press.fired) {if(event.cancelable) event.preventDefault(); return;}
     const touch = event.touches[0], dx = touch.clientX - press.x, dy = touch.clientY - press.y;
     if(!press.swipe) {
       if(Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {cancelPress(); return;}
@@ -144,7 +159,7 @@ export function initActions() {
     }
     press.dx = Math.max(-90, Math.min(0, dx));
     press.bubble.style.transform = 'translateX(' + press.dx + 'px)';
-  }, {passive:true});
+  }, {passive:false});
   const endPress = event => {
     if(!press) return;
     const current = press; press = null; clearTimeout(current.timer);
@@ -154,7 +169,7 @@ export function initActions() {
       if(event.type === 'touchend' && current.dx <= -56) startReply(current.id);
     }
     if(current.fired || current.swipe) {
-      if(current.video) videoClick = {id:current.id, until:Date.now() + 900};
+      if(current.media) mediaClick = {id:current.id, until:Date.now() + 900};
     }
     if(current.fired && event.cancelable) event.preventDefault(); // не нажимать то, что под пальцем при открытии меню
   };
