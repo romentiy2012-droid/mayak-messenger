@@ -421,16 +421,28 @@ html[data-skin=terminal] .avatar-option[aria-pressed=true]{outline:2px solid var
 html[data-skin=terminal] .avatar-photo img{filter:none;text-shadow:none}
 
 /* Кружочки и запись: видео остаётся внутри чата, камера выключается при закрытии окна. */
-.video-record-layer{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:#101b19e8;padding:20px;padding-top:max(20px,env(safe-area-inset-top));padding-bottom:max(20px,env(safe-area-inset-bottom))}
-.video-record-panel{width:100%;max-width:390px;max-height:100%;overflow:auto;background:var(--white);color:var(--ink);padding:24px;border-radius:24px;text-align:center}
-.video-record-panel h2{font-size:19px;margin:0 0 20px}
-.video-record-screen{width:min(100%,300px);aspect-ratio:1;margin:auto;border:4px solid var(--line);border-radius:50%;overflow:hidden;background:#152821;position:relative}
+.video-record-layer{position:fixed;inset:auto;z-index:1000;display:flex;align-items:center;justify-content:center;background:#101b19e8;padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));overflow:hidden;overscroll-behavior:contain;touch-action:manipulation}
+.video-record-panel{position:relative;isolation:isolate;display:grid;grid-template-rows:44px minmax(0,1fr) 56px 96px;gap:12px;width:100%;max-width:390px;height:min(600px,100%);min-height:0;overflow:hidden;background:#f2f5ee;color:var(--ink);padding:20px;border-radius:24px;text-align:center;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.video-record-panel::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('./assets/chat-nautical.png') center/cover no-repeat}
+.video-record-header{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.video-record-panel h2{font-size:19px;margin:0;text-align:left}
+.video-record-flip{display:flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--white);color:var(--green)}
+.video-record-flip svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.video-record-stage{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden}
+.video-record-screen{width:300px;height:300px;flex-shrink:0;border:4px solid var(--line);border-radius:50%;overflow:hidden;background:#152821;position:relative}
 .video-record-screen.recording{border-color:#db5353;box-shadow:0 0 0 4px #db535333}
-.video-record-preview{width:100%;height:100%;display:block;object-fit:cover}
+.video-record-preview{position:absolute;inset:0;width:100%;height:100%;min-width:0;min-height:0;display:block;object-fit:cover;pointer-events:none}
 .video-record-preview.live{transform:scaleX(-1)}
-.video-record-status{font-size:13px;line-height:1.5;min-height:40px;margin:18px 0}
-.video-record-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.video-record-actions button{min-height:44px;min-width:0;margin:0;flex:1 1 130px;padding:10px 14px;white-space:normal;overflow-wrap:anywhere}
+.video-record-status{align-self:center;font-size:13px;line-height:1.5;max-height:56px;overflow:auto;overscroll-behavior:contain;margin:0}
+.video-record-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:44px 44px;gap:8px}
+.video-record-actions button{display:flex;align-items:center;justify-content:center;width:100%;height:44px;min-height:44px;min-width:0;margin:0;padding:6px 8px;line-height:1.2;font-size:14px;white-space:normal;overflow-wrap:anywhere}
+.video-record-actions .quiet-button{border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--ink)}
+.video-record-cancel{grid-area:2/1}.video-record-main{grid-area:2/2}.video-record-play{grid-area:1/1}.video-record-again{grid-area:1/2}
+html[data-theme=dark] .video-record-panel{background:#131a17}
+html[data-theme=dark] .video-record-panel::before{filter:invert(1) hue-rotate(180deg);opacity:.62}
+html[data-skin=terminal] .video-record-panel::before{opacity:.18}
+html[data-skin=terminal] .video-record-flip{background-color:var(--t-panel)!important;border:1px solid var(--t-line)!important}
+@media(max-height:480px) and (min-width:520px){.video-record-panel{max-width:640px;grid-template-columns:minmax(0,1fr) minmax(200px,1fr);grid-template-rows:44px 56px 96px;gap:10px;padding:16px}.video-record-stage{grid-area:1/1/4/2}.video-record-header{grid-area:1/2}.video-record-status{grid-area:2/2}.video-record-actions{grid-area:3/2}}
 .message-video{padding:3px 0}
 .video-note{width:210px;max-width:60vw;aspect-ratio:1;border:0;padding:0;border-radius:50%;overflow:hidden;position:relative;display:block;background:#274c43;color:white;isolation:isolate}
 .video-note video{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none}

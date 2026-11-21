@@ -1,4 +1,4 @@
-const VERSION = '2.16.0';
+const VERSION = '2.17.0';
 const CACHE = 'mayak-shell-' + VERSION + ':' + self.registration.scope;
 const SHELL = ['./', './style.css', './assets/chat-nautical.png', './theme.js', './app.js', './js/core.js', './js/avatars.js', './js/session.js', './js/messages.js', './js/composer.js', './js/actions.js', './js/message-menu.js', './js/dialogs.js', './js/storage.js', './js/polls.js', './js/install.js', './js/updates.js', './js/push.js', './js/viewport.js', './js/sound.js', './js/media.js', './js/voice-timing.js', './js/voice-mp4.js', './js/video.js', './cloud.js', './vendor/supabase.js', './config.js', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.webmanifest'].map(path=>new URL(path,self.registration.scope).href);
 self.addEventListener('install', event => {event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));});
