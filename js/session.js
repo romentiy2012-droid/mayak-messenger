@@ -9,7 +9,22 @@ import {closeSheet} from './actions.js';
 import {stopVoice, closeViewer} from './media.js';
 import {resetVideos} from './video.js';
 
-let generation = 0, timer = null;
+let generation = 0, timer = null, bootTask = null;
+
+// До решения о сессии форма скрыта и отключена уже в исходном HTML:
+// менеджеру паролей не нужно предлагать вход при обычном открытии чата.
+function joinVisible(visible) {
+  $('welcome').hidden = !visible;
+  $('welcome').inert = !visible;
+  $('join-fields').disabled = !visible;
+}
+function showStartup(error = false) {
+  joinVisible(false); $('chat').hidden = true; $('startup').hidden = false;
+  $('startup').setAttribute('aria-busy', String(!error));
+  $('startup-status').textContent = error ? 'Не удалось подключиться. Проверьте интернет и попробуйте ещё раз.' : 'Открываем чат…';
+  $('startup-retry').hidden = !error;
+  adjustViewport();
+}
 
 function clearAddress() {if(location.hash) history.replaceState(null, '', location.pathname + location.search);}
 export function showChat(session) {
@@ -19,7 +34,7 @@ export function showChat(session) {
   // Оформление «терминал» — только у владельца; у остальных всегда обычное.
   prefs.set('owner', state.user.owner ? '1' : null);
   if(window.MayakTheme) window.MayakTheme.apply();
-  $('welcome').hidden = true; $('chat').hidden = false;
+  joinVisible(false); $('startup').hidden = true; $('chat').hidden = false;
   setMainName(session.room);
   document.querySelectorAll('.room-name').forEach(node => {node.textContent = session.room || 'Наш круг';});
   $('chat').classList.remove('direct');
@@ -56,7 +71,7 @@ export function showJoin(forget) {
   clearTyping(); stopVoice(); closeViewer(); resetList(); closeSheet();
   $('people-list').replaceChildren(); $('jump-button').hidden = true;
   try {if(navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});} catch(_error) {}
-  state.user = null; $('chat').hidden = true; $('welcome').hidden = false; $('push-banner').hidden = true; $('install-banner').hidden = true;
+  state.user = null; $('chat').hidden = true; $('startup').hidden = true; joinVisible(true); $('push-banner').hidden = true; $('install-banner').hidden = true;
   renderJoin(); connection(state.online);
   adjustViewport();
 }
@@ -96,14 +111,35 @@ export async function poll(initial = false) {
 async function checkCloud() {
   try {await api('health'); connection(true);} catch(_error) {connection(false);}
 }
-export async function boot() {
+async function restoreSession() {
   // Ссылка для сброса пароля важнее сохранённого входа: участник пришёл задать новый пароль.
   if(state.resetToken) {showJoin(); checkCloud(); return;}
+  if(state.user) return;
+  const current = generation;
+  showStartup();
   renderJoin();
-  try {const session = await api('session'); showChat(session); await poll(true);}
-  catch(error) {
-    showJoin();
-    if(error.status === 401) checkCloud();
-    else {connection(false); $('join-error').textContent = error.message || 'Не удалось подключиться к облаку.';}
+  try {
+    const session = await api('session');
+    if(current !== generation) return;
+    showChat(session); await poll(true);
   }
+  catch(error) {
+    if(current !== generation) return;
+    if(error.status === 401 || error.status === 403) {
+      showJoin();
+      if(error.status === 401) checkCloud();
+      else $('join-error').textContent = error.message;
+    } else {
+      // Сбой сети/сервера не означает выход: сохранённую сессию не трогаем.
+      connection(false); showStartup(true);
+    }
+  }
+}
+export function boot() {
+  if(!bootTask || bootTask.generation !== generation) {
+    const task = {generation, promise:null};
+    bootTask = task;
+    task.promise = restoreSession().finally(() => {if(bootTask === task) bootTask = null;});
+  }
+  return bootTask.promise;
 }

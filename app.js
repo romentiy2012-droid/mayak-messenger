@@ -15,6 +15,7 @@ import {showChat, showJoin, renderJoin, poll, boot} from './js/session.js';
 import {initUpdates, restoreUpdateContext} from './js/updates.js';
 
 initComposer(); initActions(); initDialogs(); initInstall();
+$('startup-retry').addEventListener('click', boot);
 
 $('join-form').addEventListener('submit', async event => {
   event.preventDefault(); $('join-error').textContent = ''; $('join-button').disabled = true;
@@ -51,7 +52,7 @@ $('push-enable').addEventListener('click', pushEnable);
 $('push-dismiss').addEventListener('click', () => {pushFlags.set('later', true); pushBanner();});
 
 document.addEventListener('pointerdown', unlockAudio, {passive:true});
-window.addEventListener('online', () => {if(state.user) poll(); else boot();});
+window.addEventListener('online', () => {if(state.user) poll(); else if(!$('startup').hidden) boot();});
 window.addEventListener('offline', () => connection(false));
 window.addEventListener('hashchange', () => {
   const hash = new URLSearchParams(location.hash.slice(1)), invite = hash.get('invite'), reset = hash.get('reset');
@@ -66,6 +67,7 @@ document.addEventListener('visibilitychange', () => {
   if(document.hidden) return;
   document.title = 'Маяк — свои на связи';
   if(state.user) {clearNotifications(); markRead(); poll();}
+  else if(!$('startup').hidden) boot();
 });
 
 adjustViewport(); watchViewport(); boot().finally(() => {restoreUpdateContext(); initUpdates();});

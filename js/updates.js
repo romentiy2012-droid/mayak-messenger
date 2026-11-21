@@ -5,7 +5,7 @@ import {openRoom} from './messages.js';
 import {nearBottom} from './viewport.js';
 import {voicePlaying} from './media.js';
 
-export const APP_VERSION = '2.17.0';
+export const APP_VERSION = '2.17.1';
 const RELOAD_KEY = 'mayak.update.reload', CONTEXT_KEY = 'mayak.update.context';
 const CHECK_EVERY = 60000, QUIET_FOR = 3000;
 let registration = null, checking = false, started = false, reloading = false;
@@ -16,6 +16,7 @@ function banner(text = '') {
   if(node) {node.textContent = text; node.hidden = !text;}
 }
 function safeToReload() {
+  if(!$('startup').hidden) return false;
   if(document.hidden || !navigator.onLine || composing || Date.now() - lastInput < QUIET_FOR) return false;
   if(state.user && !state.online) return false;
   if(composerBusy() || mutationsPending() || voicePlaying()) return false;

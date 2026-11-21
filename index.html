@@ -21,7 +21,13 @@
   <script type="module" src="./app.js"></script>
 </head>
 <body>
-  <main id="welcome" class="welcome">
+  <main id="startup" class="startup" aria-labelledby="startup-title" aria-busy="true">
+    <img src="./icon.svg" alt="" width="64" height="64">
+    <h1 id="startup-title">Маяк</h1>
+    <p id="startup-status" role="status">Открываем чат…</p>
+    <button id="startup-retry" class="quiet-button" type="button" hidden>Повторить</button>
+  </main>
+  <main id="welcome" class="welcome" hidden inert>
     <div class="welcome-top"><a class="brand" href="./"><img src="./icon.svg" alt="" width="36" height="36"><span>маяк<span class="brand-dot">.</span></span></a><span class="small-label">НЕБОЛЬШОЙ ЧАТ ДЛЯ СВОИХ</span></div>
     <div class="welcome-content">
       <div class="welcome-art" aria-hidden="true"><div class="art-disc"></div><div class="art-beam beam-one"></div><div class="art-beam beam-two"></div><div class="art-tower"><span></span><i></i></div><div class="art-island"></div><div class="art-wave wave-one"></div><div class="art-wave wave-two"></div><div class="art-message">ну что, все здесь?<span>✓✓</span></div><div class="art-reply">на связи <span>●</span></div></div>
@@ -30,6 +36,7 @@
         <h1 id="welcome-title">Свои<br> на связи<span>.</span></h1>
         <p class="welcome-description">Один общий чат. Знакомые имена.<br>И ничего лишнего между вами.</p>
         <form id="join-form">
+          <fieldset id="join-fields" disabled>
           <p id="reset-note" class="reset-note" hidden>Придумайте новый пароль. Ссылка владельца одноразовая и действует сутки.</p>
           <div id="join-identity">
             <label for="join-mode">Вход или регистрация</label><select id="join-mode"><option value="login">Вход — аккаунт уже есть</option><option value="register">Регистрация — первый раз</option></select>
@@ -41,6 +48,7 @@
           <p id="join-error" class="form-error" role="alert"></p>
           <button id="join-button" class="primary-button" type="submit">Войти в чат <span aria-hidden="true">↗</span></button>
           <button id="reset-cancel" class="link-button" type="button" hidden>Войти обычным способом</button>
+          </fieldset>
         </form>
         <p class="join-note"><span class="tiny-lock" aria-hidden="true">↳</span> Вход по приглашению. Имя видно участникам.</p>
       </section>
@@ -72,7 +80,7 @@
         <div id="messages" class="messages"></div>
       </div>
       </div>
-      <div class="composer-area"><button id="jump-button" class="jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></button><p id="send-error" class="send-error" role="alert" hidden></p><div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" type="button" aria-label="Отменить">×</button></div><div id="attachment-bar" class="composer-context attachment-bar" hidden><img id="attachment-thumb" alt="" hidden><div><strong id="attachment-title"></strong><span id="attachment-text"></span></div><button id="attachment-cancel" type="button" aria-label="Убрать вложение">×</button></div><div id="record-bar" class="record-bar" hidden><i class="record-dot" aria-hidden="true"></i><span id="record-time" class="record-time">0:00</span><span class="record-hint">Запись</span><button id="record-cancel" class="record-cancel" type="button">Отмена</button><button id="record-send" class="record-send" type="button">Отправить</button></div><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Профиль и участники"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><input id="photo-input" type="file" accept="image/*" hidden><button id="attach-button" class="tool-button" type="button" aria-label="Добавить фото или опрос"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button id="camera-button" class="tool-button" type="button" aria-label="Записать видеокружочек" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="4"/><path d="m15 10 6-3v10l-6-3"/></svg></button><button id="voice-button" class="tool-button" type="button" aria-label="Записать голосовое сообщение" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg></button><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.17.0</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
+      <div class="composer-area"><button id="jump-button" class="jump-button" type="button" aria-label="К последним сообщениям" hidden><span id="jump-count" class="jump-count" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></button><p id="send-error" class="send-error" role="alert" hidden></p><div id="composer-context" class="composer-context" hidden><div><strong id="context-title"></strong><span id="context-text"></span></div><button id="context-cancel" type="button" aria-label="Отменить">×</button></div><div id="attachment-bar" class="composer-context attachment-bar" hidden><img id="attachment-thumb" alt="" hidden><div><strong id="attachment-title"></strong><span id="attachment-text"></span></div><button id="attachment-cancel" type="button" aria-label="Убрать вложение">×</button></div><div id="record-bar" class="record-bar" hidden><i class="record-dot" aria-hidden="true"></i><span id="record-time" class="record-time">0:00</span><span class="record-hint">Запись</span><button id="record-cancel" class="record-cancel" type="button">Отмена</button><button id="record-send" class="record-send" type="button">Отправить</button></div><form id="message-form" class="composer"><button id="mobile-profile" class="mobile-profile" type="button" aria-label="Профиль и участники"><span id="mobile-avatar" class="avatar palette-0"></span></button><textarea id="message-input" rows="1" maxlength="2000" aria-label="Сообщение" placeholder="Написать своим…"></textarea><input id="photo-input" type="file" accept="image/*" hidden><button id="attach-button" class="tool-button" type="button" aria-label="Добавить фото или опрос"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button id="camera-button" class="tool-button" type="button" aria-label="Записать видеокружочек" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="4"/><path d="m15 10 6-3v10l-6-3"/></svg></button><button id="voice-button" class="tool-button" type="button" aria-label="Записать голосовое сообщение" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg></button><button id="send-button" class="send-button" type="submit" aria-label="Отправить сообщение" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button></form><div class="composer-footnote"><span>Маяк · только для своего круга · 2.17.1</span><span class="desktop-hint">Enter — отправить · Shift + Enter — новая строка</span></div></div>
     </section>
   </main>
 
