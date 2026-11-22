@@ -96,8 +96,9 @@ test('connection retry succeeds on button and on returning to the app',{timeout:
  const f=await fixture({fail:true}),{page}=f;
  try{
   await expect(page.locator('#startup-retry')).toBeVisible({timeout:20000});f.probe.fail=false;await page.locator('#startup-retry').tap();await expect(page.locator('#chat')).toBeVisible();await noForm(page);
-  f.probe.fail=true;await page.reload();await expect(page.locator('#startup-retry')).toBeVisible({timeout:20000});f.probe.fail=false;
-  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(page.locator('#chat')).toBeVisible();await noForm(page);assert.equal(f.probe.password,0);assert.deepEqual(f.probe.errors,[]);
+  await expect.poll(()=>page.evaluate(async()=>!!await (await import('/js/offline.js')).loadHistory('00000000-0000-4000-8000-000000000001'))).toBe(true);
+  f.probe.fail=true;await page.reload();await expect(page.locator('#chat')).toBeVisible();await expect(page.locator('#offline-banner')).toBeVisible();f.probe.fail=false;
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect.poll(()=>page.evaluate(async()=>(await import('/js/core.js')).state.verified),{timeout:20000}).toBe(true);await noForm(page);assert.equal(f.probe.password,0);assert.deepEqual(f.probe.errors,[]);
  }finally{await f.close();}
 });
 

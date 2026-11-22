@@ -5,6 +5,19 @@
   let client, channel, pendingCallback, lastHeartbeat = 0, skew = 0; // skew — на сколько часы сервера впереди часов телефона
   const pendingKey = 'mayak.cloud.pending:' + location.pathname;
   const storage = {get(){try{return JSON.parse(localStorage.getItem(pendingKey)||'null');}catch{return null;}},set(value){try{if(value)localStorage.setItem(pendingKey,JSON.stringify(value));else localStorage.removeItem(pendingKey);}catch{}}};
+  const transfers=new Set();
+  async function timedFetch(input,init={},limit=25000){
+    const controller=new AbortController();transfers.add(controller);
+    const abort=()=>controller.abort();if(init.signal?.aborted)abort();else init.signal?.addEventListener('abort',abort,{once:true});
+    const timeout=setTimeout(abort,limit);
+    try{
+      const response=await fetch(input,{...init,signal:controller.signal});
+      // fetch resolves at headers; keep the deadline through the response body too.
+      const bytes=await response.arrayBuffer();
+      return new Response([204,205,304].includes(response.status)?null:bytes,{status:response.status,statusText:response.statusText,headers:response.headers});
+    }finally{clearTimeout(timeout);transfers.delete(controller);init.signal?.removeEventListener('abort',abort);}
+  }
+  function cachedUserId(){try{return JSON.parse(localStorage.getItem('mayak.cloud.auth:'+new URL(config.supabaseURL).hostname)||'null')?.user?.id||null;}catch{return null;}}
   function fail(message,status=400){return Object.assign(new Error(message),{status});}
   function nameToEmail(raw) {
     const clean = (raw || '').trim();
@@ -24,9 +37,7 @@
   // Запрос мимо клиента Supabase (служебные функции, проверка связи) с ограничением по времени.
   async function plain(path,options={},limit=15000) {
     db();
-    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),limit);
-    try{return await fetch(new URL(path,config.supabaseURL),{...options,signal:controller.signal});}
-    finally{clearTimeout(timeout);}
+    return timedFetch(new URL(path,config.supabaseURL),options,limit);
   }
   function db() {
     if(client) return client;
@@ -39,16 +50,15 @@
     if(!key.startsWith('sb_publishable_') && !legacyAnon) throw fail('Нужен публичный ключ Supabase. Секретный ключ в приложении запрещён.',503);
     client=window.MayakSupabase.createClient(url.origin,key,{auth:{storageKey:'mayak.cloud.auth:'+url.hostname,persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{fetch:async (input,init={})=>{
       // Файлам даём больше времени: фото по мобильной сети может грузиться дольше обычного запроса.
-      const limit=String(typeof input==='string'?input:input.url||'').includes('/storage/v1/')?90000:15000;
-      const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),limit);
-      const abort=()=>controller.abort();if(init.signal?.aborted)abort();else init.signal?.addEventListener('abort',abort,{once:true});
-      try{return await fetch(input,{...init,signal:controller.signal});}finally{clearTimeout(timeout);init.signal?.removeEventListener('abort',abort);}
+      const limit=String(typeof input==='string'?input:input.url||'').includes('/storage/v1/')?90000:25000;
+      return timedFetch(input,init,limit);
     }}});
     return client;
   }
   function unwrap(result) {
     if(result.error){
       const e=result.error;
+      if(result.status===0 || e.name==='AuthRetryableFetchError' || /^(TypeError:|AbortError:|TimeoutError:)|Failed to fetch|NetworkError|Load failed|fetch failed/i.test(e.message||''))throw Object.assign(new Error('Нет связи. Отправка продолжится после подключения.'),{status:0});
       const messages={'Invalid login credentials':'Неверное имя или пароль.','Email not confirmed':'Владельцу нужно отключить подтверждение почты (Confirm email) в Supabase.','User already registered':'Такое имя уже зарегистрировано. Выберите «Вход».','Email rate limit exceeded':'Слишком много попыток. Попробуйте позже.'};
       throw Object.assign(fail(messages[e.message]||e.message,e.status||(['42501','PGRST301'].includes(e.code)?403:400)),{code:e.code});
     }
@@ -97,6 +107,7 @@
   async function api(path,options={}) {
     const [route,query='']=path.split('?');const params=new URLSearchParams(query);
     const body=options.body?JSON.parse(options.body):{};
+    if(body._user){const auth=unwrap(await db().auth.getSession());if(auth.session?.user.id!==body._user)throw fail('Вход изменился. Отправка остановлена.',401);}
     if(route==='join'){
       const name=(body.name||'').trim();
       const email=nameToEmail(body.email||name);
@@ -161,16 +172,16 @@
     if(route==='typing'){await rpc('typing_to',{p_peer:body.peer||null,p_on:!!body.on});return {};}
     if(route==='heard')return {message:await rpc('heard',{p_id:body.id})};
     if(route==='messages')return messages(params);
-    if(route==='events'){
+    if(route==='events')return messages(params);
+    if(route==='presence'){
+      const jobs=[db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing,avatar_icon,avatar_file'),db().from('mayak_reads').select('user_id,peer,last_read,typing')];
       if(Date.now()-lastHeartbeat>25000){
-        const sent=Date.now(),me=await rpc('profile');lastHeartbeat=Date.now();
-        // last_seen в ответе — время сервера в момент отметки; сравниваем с серединой запроса.
-        const server=Date.parse(me&&me.last_seen);if(server)skew=server-(sent+lastHeartbeat)/2;
+        const sent=Date.now();jobs.push(rpc('profile').then(me=>{lastHeartbeat=Date.now();const server=Date.parse(me&&me.last_seen);if(server)skew=server-(sent+lastHeartbeat)/2;}));
       }
-      const result=await messages(params);
-      const people=unwrap(await db().from('mayak_members').select('id,name,owner,last_seen,last_read,typing,avatar_icon,avatar_file'));
-      const reads=unwrap(await db().from('mayak_reads').select('user_id,peer,last_read,typing'));
-      return {...result,people:people.map(person),reads};
+      const settled=await Promise.allSettled(jobs),result={};
+      if(settled[0].status==='fulfilled'&&!settled[0].value.error)result.people=settled[0].value.data.map(person);
+      if(settled[1].status==='fulfilled'&&!settled[1].value.error)result.reads=settled[1].value.data;
+      return result;
     }
     throw fail('Неизвестный запрос.');
   }
@@ -205,12 +216,50 @@
   }
   async function download(path,bucket=BUCKET){
     const result=await db().storage.from(bucket).download(path);
-    if(result.error) throw fail('Файл недоступен.',404);
+    if(result.error){const status=Number(result.error.statusCode||result.error.status)||0;throw Object.assign(new Error(status===404?'Файл удалён.':status===401||status===403?'Нет доступа к файлу.':'Не удалось загрузить. Нажмите, чтобы повторить.'),{status});}
     return result.data;
   }
+  async function uploadQueued(item,persist,progress){
+    const auth=unwrap(await db().auth.getSession());
+    if(auth.session?.user.id!==item.user)throw fail('Вход изменился.',401);
+    if(!item.blob)throw fail('Запись не сохранилась. Выбери файл ещё раз.',422);
+    const bucket=item.kind==='video'?'mayak-video-source':BUCKET;
+    if(!item.uploadPath){const bytes=new Uint8Array(12);crypto.getRandomValues(bytes);item.uploadPath=item.user+'/'+(item.sticker?'sticker-':'')+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('')+'.'+item.extension;await persist();}
+    if(!item.uploadPath.startsWith(item.user+'/'))throw fail('Неверный владелец файла.',403);
+    if(item.blob.size<1024*1024){
+      const result=await db().storage.from(bucket).upload(item.uploadPath,item.blob,{contentType:item.blob.type,upsert:false,cacheControl:bucket===BUCKET?'31536000':'0'});
+      // Path was durably generated before upload. A lost success response is safe to retry.
+      if(result.error&&![409].includes(Number(result.error.statusCode||result.error.status)))throw Object.assign(new Error('Не удалось загрузить файл.'),{status:Number(result.error.statusCode||result.error.status)||0});
+      progress(100);return item.uploadPath;
+    }
+    const origin=new URL(config.supabaseURL).origin,endpoint=origin+'/storage/v1/upload/resumable';
+    const headers={'Tus-Resumable':'1.0.0',apikey:config.supabasePublishableKey,Authorization:'Bearer '+auth.session.access_token};
+    const checked=url=>{const value=new URL(url,endpoint);if(value.origin!==origin||!value.pathname.startsWith('/storage/v1/upload/resumable/'))throw fail('Неверный адрес загрузки.',400);return value.href;};
+    const check=response=>{if(!response.ok)throw fail(response.status===413?'Файл слишком большой.':'Загрузка прервана.',response.status);return response;};
+    let offset=0;
+    if(item.uploadURL){
+      const response=await timedFetch(checked(item.uploadURL),{method:'HEAD',headers},25000);
+      if(response.status===404||response.status===410){item.uploadURL=null;await persist();}
+      else {check(response);offset=Number(response.headers.get('Upload-Offset'));if(!response.headers.has('Upload-Offset')||!Number.isSafeInteger(offset)||offset<0||offset>item.blob.size)throw fail('Не удалось продолжить загрузку.',502);}
+    }
+    if(!item.uploadURL){
+      const metadata={bucketName:bucket,objectName:item.uploadPath,contentType:item.blob.type,cacheControl:bucket===BUCKET?'31536000':'0'};
+      const response=await timedFetch(endpoint,{method:'POST',headers:{...headers,'Upload-Length':String(item.blob.size),'Upload-Metadata':Object.entries(metadata).map(([key,value])=>key+' '+btoa(value)).join(',')}},25000);
+      if(response.status===409){const info=await db().storage.from(bucket).info(item.uploadPath);if(!info.error&&Number(info.data.size)===item.blob.size)return item.uploadPath;}
+      check(response);if(!response.headers.get('Location'))throw fail('Нет адреса продолжения загрузки.',502);item.uploadURL=checked(response.headers.get('Location'));await persist();
+    }
+    while(offset<item.blob.size){
+      if(cachedUserId()!==item.user)throw fail('Вход изменился.',401);
+      const end=Math.min(item.blob.size,offset+6*1024*1024);
+      const response=check(await timedFetch(checked(item.uploadURL),{method:'PATCH',headers:{...headers,'Content-Type':'application/offset+octet-stream','Upload-Offset':String(offset)},body:item.blob.slice(offset,end)},300000));
+      const next=Number(response.headers.get('Upload-Offset'));if(!response.headers.has('Upload-Offset')||next!==end)throw fail('Не удалось подтвердить загрузку.',502);
+      offset=next;progress(Math.round(offset/item.blob.size*100));
+    }
+    return item.uploadPath;
+  }
   async function removeFile(path){await db().storage.from(BUCKET).remove([path]);}
-  function stop(){pendingCallback=null;if(channel){db().removeChannel(channel).catch(()=>{});channel=null;}lastHeartbeat=0;}
-  window.MayakCloud={api,watch,stop,upload,download,removeFile,
+  function stop(){for(const transfer of transfers)transfer.abort();pendingCallback=null;if(channel){db().removeChannel(channel).catch(()=>{});channel=null;}lastHeartbeat=0;}
+  window.MayakCloud={api,watch,stop,upload,uploadQueued,download,removeFile,cachedUserId,presence:()=>api('presence'),
     avatarUpload:blob=>upload(blob,'jpg','mayak-avatars'),
     avatarDownload:path=>download(path,'mayak-avatars'),
     avatarRemove:path=>db().storage.from('mayak-avatars').remove([path])};
@@ -218,6 +267,7 @@
     videoUpload:(blob,extension)=>upload(blob,extension,'mayak-video-source'),
     videoDownload:path=>download(path,'mayak-video'),
     videoRemove:path=>db().storage.from('mayak-video').remove([path]),
-    videoSourceRemove:path=>db().storage.from('mayak-video-source').remove([path])
+    videoSourceRemove:path=>db().storage.from('mayak-video-source').remove([path]),
+    videoStream:async path=>{const result=await db().storage.from('mayak-video').createSignedUrl(path,300);if(result.error)throw result.error;return result.data.signedUrl;}
   });
 })();

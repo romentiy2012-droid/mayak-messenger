@@ -167,7 +167,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.19.0 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.20.0 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
@@ -175,6 +175,11 @@ function aboutDialog() {
 }
 
 export function initDialogs() {
+  $('stickers-button').addEventListener('click',()=>{
+    if(!state.user||state.sending||state.editing)return;
+    if(state.attachment){toast('Сначала отправь или убери вложение.');return;}
+    const content=dialog('Мои стикеры');cleanup=stickerCollection(content,closeDialog);
+  });
   $('dialog-layer').addEventListener('focusin', event => {
     revealDialogFocus();
     if(event.target.matches('input,textarea,select')) followViewport(1500);

@@ -137,6 +137,7 @@ export function stopVideo(){if(playing){playing.pause();playing=null;}playingFil
 export function resetVideos(){cancelVideoRecording();stopVideo();urls.forEach(p=>p.then(URL.revokeObjectURL).catch(()=>{}));urls.clear();}
 export function forgetVideo(path){if(playingFile===path)stopVideo();const old=urls.get(path);if(old)old.then(URL.revokeObjectURL).catch(()=>{});urls.delete(path);}
 function videoURL(path){
+ if(window.MayakCloud.videoStream)return window.MayakCloud.videoStream(path);
  if(!urls.has(path)){const pending=window.MayakCloud.videoDownload(path).then(blob=>{if(urls.get(path)!==pending)throw new Error('Файл удалён из хранилища');return URL.createObjectURL(blob);});urls.set(path,pending);pending.catch(()=>{if(urls.get(path)===pending)urls.delete(path);});}
  return urls.get(path);
 }
@@ -151,7 +152,7 @@ export function videoNode(message){
  const paint=()=>{toggle.classList.remove('playing');toggle.setAttribute('aria-label','Смотреть видеокружочек');};
  video.addEventListener('pause',paint);video.addEventListener('ended',()=>{paint();video.currentTime=0;time.textContent=clock(message.file_meta?.duration);});
  video.addEventListener('timeupdate',()=>{if(!video.paused)time.textContent=clock(Math.max(0,(video.duration||message.file_meta?.duration||0)-video.currentTime));});
- video.addEventListener('error',()=>{icon.textContent='↻';paint();toggle.classList.remove('loading');});
+ video.addEventListener('error',()=>{icon.textContent='↻';paint();toggle.classList.remove('loading');video.removeAttribute('src');forgetVideo(message.file);});
  let loading=false;
  toggle.addEventListener('click',async()=>{
   if(loading||!current())return;if(!video.paused){video.pause();return;}

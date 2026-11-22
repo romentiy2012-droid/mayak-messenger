@@ -3,7 +3,7 @@ import {$, state, post, element, avatar, paintAvatar, adminTag, snippet, toast, 
 import {scrollBottom, nearBottom} from './viewport.js';
 import {ping, sent} from './sound.js';
 import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js';
-import {photoNode, voiceNode, stopVoice, forgetMedia, closeViewer} from './media.js';
+import {photoNode, voiceNode, stopVoice, forgetMedia, closeViewer, isSticker} from './media.js';
 import {videoNode,stopVideo,forgetVideo} from './video.js';
 import {pollNode,resetPolls} from './polls.js';
 import {messageReaders, refreshMessageDetails, closeMessageDetails} from './message-details.js';
@@ -99,6 +99,7 @@ function buildRow(message, source, readers, admin) {
   }
   const own = message.user_id === state.user.id, gone = !!message.deleted;
   const row = element('article', 'message-row' + (own ? ' own' : '') + (gone ? ' deleted' : '')); row.dataset.id = message.id;
+  if(!gone&&isSticker(message))row.classList.add('sticker-row');
   row.appendChild(avatar(personById(message.user_id) || {id:message.user_id, name:message.name}));
   const bubble = element('div', 'message-bubble');
   const author = element('div', 'message-author', message.name); if(admin) author.appendChild(adminTag());
@@ -221,6 +222,7 @@ export function mergeMessages(messages, mode) {
   if(mode === 'sent') sent();
   if(fresh) {if(document.hidden) document.title = 'Новое сообщение · Маяк'; else ping();}
   markRead();
+  document.dispatchEvent(new Event('mayak-history-changed'));
 }
 
 export function updateUnread() {
@@ -240,7 +242,7 @@ export function updateUnread() {
 // Прочитанным считается всё, что на экране: чат открыт и лента прокручена вниз.
 export function markRead() {
   const room = state.room, shown = state.user ? inRoom(room) : [];
-  if(state.user && !document.hidden && shown.length && nearBottom()) {
+  if(state.user && state.verified && state.online && !document.hidden && shown.length && nearBottom()) {
     const last = shown[shown.length - 1].id;
     if(last > (state.read[room] || 0)) {
       state.read[room] = last; clearTimeout(readTimer);

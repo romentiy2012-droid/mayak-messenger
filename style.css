@@ -491,3 +491,17 @@ html[data-skin=terminal] .storage-card,html[data-skin=terminal] .storage-confirm
 .poll-editor{display:grid;gap:12px}.poll-editor textarea{display:block;box-sizing:border-box;width:100%;min-height:86px;padding:12px;border:1px solid #7d9f9180;border-radius:9px;font:inherit;color:inherit;background:transparent;resize:vertical}.poll-editor .about-note{margin:0}.poll-editor-options{display:grid;gap:8px}.poll-editor-option{display:flex;gap:7px;align-items:center}.poll-editor-option input{min-width:0;flex:1;margin:0}.poll-editor-option .poll-option-remove{width:40px;min-width:40px;min-height:44px;margin:0;padding:4px;font-size:24px}.poll-editor .poll-setting{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.45;margin:0}.poll-editor .poll-setting input{width:20px;height:20px;min-height:20px;margin:0;padding:0;flex:0 0 20px;accent-color:#218879}.poll-editor-status{font-size:12px;margin:0;line-height:1.5}.poll-editor .form-error:empty,.poll-editor-status:empty{display:none}
 html[data-skin="terminal"] .poll-option,html[data-skin="terminal"] .poll-confirm,html[data-skin="terminal"] .poll-editor textarea{border-radius:0;border-color:#7af59a80}
 @media(max-width:760px){.poll-row .message-bubble{width:330px;max-width:calc(100% - 34px)}.poll-question{font-size:17px}.poll-option-label{font-size:15px}.poll-kind,.poll-total,.poll-note{font-size:12px}.poll-card .quiet-button{font-size:13px;min-height:44px}.poll-editor .poll-setting{font-size:14px}}
+/* Стикер целиком лежит на фоне чата, включая светлую, тёмную и терминальную темы. */
+.message-row.sticker-row .message-bubble,html[data-skin=terminal] .message-row.sticker-row .message-bubble{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;max-width:240px}
+.message-row.sticker-row .message-photo.message-sticker{width:min(200px,51vw);height:auto;max-height:240px;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible}
+.message-row.sticker-row .message-photo img{background:transparent!important;object-fit:contain;border-radius:0;max-height:240px}
+.sticker-row .message-author{display:inline-block;padding:3px 8px;border-radius:10px;background:var(--paper);margin-bottom:4px}
+.sticker-row.own .message-author{display:none}
+.sticker-row .message-meta{width:fit-content;margin:5px 0 0 auto;padding:3px 9px;border-radius:12px;background:var(--paper)}
+.sticker-row .message-quote{max-width:220px;background:var(--paper)}
+.media-retry{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:12px;color:var(--muted)}
+.message-photo{position:relative}
+.outbox-list{display:flex;flex-direction:column;gap:8px}
+.outbox-row{align-self:flex-end;max-width:min(86%,380px);padding:10px 14px;margin:5px 0;border:1px dashed var(--green);border-radius:16px;background:var(--paper);color:var(--ink);overflow-wrap:anywhere}
+.outbox-title{display:block;white-space:pre-wrap;font-size:14px}.outbox-status{display:block;font-size:12px;color:var(--muted);margin-top:4px}.outbox-action{border:0;background:transparent;padding:8px 8px 0 0;color:var(--green);font:inherit;font-size:12px;min-height:36px}
+@media(max-width:420px){#stickers-button{width:32px;min-width:32px;padding:5px}.composer{gap:4px}}

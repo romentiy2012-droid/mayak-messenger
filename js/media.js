@@ -7,15 +7,38 @@ import {prepareVoicePlayback} from './voice-mp4.js';
 // ===== Файлы из хранилища =====
 // Файл скачивается один раз и остаётся на устройстве (Cache Storage), чтобы не тянуть его при каждом открытии.
 const urls = new Map(), ready = new Map(); // ready — уже загруженные адреса: нужны, чтобы запустить звук прямо в момент нажатия
-const cacheKey = path => location.origin + '/__media/' + path;
+const cacheKey = path => location.origin + '/__media/' + (state.user?.id||'none') + '/' + path;
+let mediaEpoch=0,activeDownloads=0;
+const downloadQueue=[],lazyNodes=new Map();
+function drain(){while(activeDownloads<2&&downloadQueue.length){const job=downloadQueue.shift();if(job.epoch!==mediaEpoch){job.reject(new Error('Вход изменился.'));continue;}activeDownloads++;Promise.resolve().then(job.run).then(job.resolve,job.reject).finally(()=>{activeDownloads--;drain();});}}
+function download(run){return new Promise((resolve,reject)=>{downloadQueue.push({run,resolve,reject,epoch:mediaEpoch});drain();});}
+const observer='IntersectionObserver' in window?new IntersectionObserver(entries=>entries.forEach(entry=>{const item=lazyNodes.get(entry.target);if(item){item.visible=entry.isIntersecting;if(item.visible)item.load();}}),{rootMargin:'160px'}):null;
+function lazy(node,load){
+  const item={visible:!observer,busy:false,done:false,attempts:0,timer:null,load:async()=>{
+    if(item.busy||item.done||!item.visible||!node.isConnected)return;
+    item.busy=true;const generation=mediaEpoch;
+    try{await load();if(generation===mediaEpoch){item.done=true;observer?.unobserve(node);lazyNodes.delete(node);}}
+    catch(_error){if(generation===mediaEpoch&&item.attempts++<3)item.timer=setTimeout(item.load,[1500,5000,15000][item.attempts-1]);}
+    finally{item.busy=false;}
+  }};
+  lazyNodes.set(node,item);if(observer)observer.observe(node);else setTimeout(item.load,0);return ()=>{item.attempts=0;item.load();};
+}
+function retryVisible(){for(const [node,item] of lazyNodes){if(!node.isConnected){clearTimeout(item.timer);observer?.unobserve(node);lazyNodes.delete(node);}else {item.attempts=0;item.load();}}}
+window.addEventListener('online',retryVisible);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)retryVisible();});
+export function resetMedia(){
+  mediaEpoch++;reset();for(const item of lazyNodes.values())clearTimeout(item.timer);lazyNodes.clear();observer?.disconnect();
+  for(const item of ready.values())URL.revokeObjectURL(item.url);urls.clear();ready.clear();voiceTimings.clear();drain();
+}
 async function loadBlob(path, isCurrent) {
+  const key=cacheKey(path);
   let store = null;
   try {store = 'caches' in window ? await caches.open('mayak-media') : null;} catch(_error) {store = null;}
-  if(store) {const hit = await store.match(cacheKey(path)).catch(() => null); if(hit) return hit.blob();}
-  const blob = await window.MayakCloud.download(path);
+  if(store) {const hit = await store.match(key).catch(() => null); if(hit) return hit.blob();}
+  const blob = await download(()=>window.MayakCloud.download(path));
   if(store && isCurrent()) {
-    await store.put(cacheKey(path), new Response(blob, {headers:{'Content-Type':blob.type || 'application/octet-stream'}})).catch(() => {});
-    if(!isCurrent()) await store.delete(cacheKey(path)).catch(() => {});
+    await store.put(key, new Response(blob, {headers:{'Content-Type':blob.type || 'application/octet-stream'}})).catch(() => {});
+    if(!isCurrent()) await store.delete(key).catch(() => {});
   }
   return blob;
 }
@@ -99,11 +122,13 @@ export function photoNode(message) {
   const meta = message.file_meta || {};
   // Не кнопка, а блок: долгое нажатие на фото должно открывать меню сообщения, как и на тексте.
   const frame = element('div', 'message-photo' + (isSticker(message) ? ' message-sticker' : '')); frame.dataset.photo = message.id;
-  frame.setAttribute('role', 'button'); frame.tabIndex = 0; frame.setAttribute('aria-label', 'Открыть фото');
+  frame.setAttribute('role', 'button'); frame.tabIndex = 0; frame.setAttribute('aria-label', isSticker(message)?'Стикер':'Открыть фото');
   if(meta.w > 0 && meta.h > 0) frame.style.aspectRatio = meta.w + ' / ' + meta.h; // место под фото — заранее, чтобы лента не прыгала
-  const image = element('img'); image.alt = 'Фото'; image.decoding = 'async'; image.draggable = false;
+  const image = element('img'); image.alt = isSticker(message)?'Стикер':'Фото'; image.decoding = 'async'; image.draggable = false;
   frame.appendChild(image);
-  mediaURL(message.file).then(url => {image.src = url;}).catch(() => {frame.classList.add('failed'); frame.textContent = 'Фото недоступно';});
+  const note=element('span','media-retry','Нажми, чтобы загрузить');frame.appendChild(note);
+  const retry=lazy(frame,async()=>{try{const url=await mediaURL(message.file);image.src=url;frame.classList.remove('failed');note.hidden=true;}catch(error){frame.classList.add('failed');note.textContent=error.status===404?'Файл удалён':'Загрузка прервалась · Повторить';throw error;}});
+  frame.addEventListener('click',event=>{if(!image.src||frame.classList.contains('failed')){event.stopPropagation();retry();}},true);
   return frame;
 }
 export function openViewer(id) {
@@ -168,7 +193,7 @@ export function voiceNode(message) {
   const rate = element('button', 'voice-speed', speedLabel()); rate.type = 'button'; rate.setAttribute('aria-label', 'Скорость воспроизведения');
   box.appendChild(play); box.appendChild(bar); box.appendChild(element('span', 'voice-time', clock(voiceDuration(message)))); box.appendChild(rate);
   if(player.id === message.id) paint(box);
-  mediaURL(message.file, true).catch(() => {}); // подготовка до нажатия сохраняет запуск звука на iPhone
+  lazy(box,()=>mediaURL(message.file,true)); // готовим только записи возле видимой области
   return box;
 }
 // Одновременно играет одно голосовое. Строка сообщения может быть пересоздана, поэтому ищем её заново.

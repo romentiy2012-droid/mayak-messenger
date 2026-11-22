@@ -26,6 +26,7 @@ const mock=`(() => {
   },
   watch(fn){callback=fn;},stop(){callback=null;},
   async videoUpload(blob){window.videoTest.uploads++;bytes=Array.from(new Uint8Array(await blob.arrayBuffer()));return id+'/'+'a'.repeat(24)+'.mp4';},
+  async videoStream(){return 'https://video-fixture.supabase.co/output.mp4';},
   async videoDownload(){return (await fetch('/__output.mp4')).blob();},async videoRemove(){},async videoSourceRemove(){}
  };
 })();`;
@@ -43,11 +44,16 @@ test('video UI: cancel, real camera preview, retry without duplicate, conversion
   res.writeHead(200,{'Content-Type':mime[path.extname(file)]});fs.createReadStream(file).pipe(res);
  });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
  try{
-  browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--use-file-for-fake-audio-capture='+microphone]});
+  browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--use-file-for-fake-audio-capture='+microphone,'--disable-accelerated-video-encode']});
   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
+  await page.route('https://video-fixture.supabase.co/output.mp4',route=>route.fulfill({contentType:'video/mp4',body:output}));
   await page.route('**/cloud.js',route=>route.fulfill({contentType:'text/javascript',body:mock}));
-  await page.addInitScript(()=>{localStorage.setItem('mayak.push.off','1');window.cameraTracks=[];const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async constraints=>{const stream=await original(constraints);window.cameraTracks.push(...stream.getTracks());return stream;};});
+  await page.addInitScript(()=>{localStorage.setItem('mayak.push.off','1');
+   // Headless Windows Chrome can advertise H.264 but produce an audio-only MP4 (also on the previous recorder).
+   // Exercise real camera recording with its software VP8 encoder; the worker still produces H.264/AAC MP4.
+   const supported=MediaRecorder.isTypeSupported.bind(MediaRecorder);MediaRecorder.isTypeSupported=mime=>!mime.startsWith('video/mp4')&&supported(mime);
+   window.cameraTracks=[];const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async constraints=>{const stream=await original(constraints);window.cameraTracks.push(...stream.getTracks());return stream;};});
   await page.exposeFunction('convertInput',async bytes=>{fs.mkdirSync(path.join(root,'test-results'),{recursive:true});fs.writeFileSync(path.join(root,'test-results/video-camera-source.bin'),Buffer.from(bytes));const result=await convertVideo(Buffer.from(bytes));output=result.data;return result.meta;});
   await page.goto('http://127.0.0.1:'+server.address().port+'/');await expect(page.locator('#chat')).toBeVisible();
   await page.locator('#camera-button').click();await expect(page.getByRole('button',{name:'Начать запись',exact:true})).toBeEnabled();
@@ -55,25 +61,25 @@ test('video UI: cancel, real camera preview, retry without duplicate, conversion
   await page.locator('#camera-button').click();
   await expect(page.getByRole('button',{name:'Начать запись',exact:true})).toBeEnabled({timeout:10000}).catch(async error=>{console.error('camera status:',await page.locator('.video-record-status').allTextContents(),'; page errors:',errors);throw error;});
   await page.getByRole('button',{name:'Начать запись',exact:true}).click();
-  await page.waitForTimeout(2200);await page.getByRole('button',{name:'Остановить',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Отправить',exact:true})).toBeVisible();
+  await page.waitForTimeout(2200);await page.getByRole('button',{name:'Остановить',exact:true}).click({timeout:7000}).catch(async error=>{console.error('recording:',await page.locator('.video-record-status').allTextContents(),await page.locator('#toast').allTextContents(),errors);throw error;});
+  await expect(page.getByRole('button',{name:'Отправить',exact:true})).toBeVisible().catch(async error=>{console.error('recording end:',await page.locator('.video-record-status').allTextContents(),await page.locator('#toast').allTextContents(),errors);throw error;});
+  await expect.poll(()=>page.locator('.video-record-preview').evaluate(v=>v.videoWidth)).toBeGreaterThan(0);
   assert.equal(await page.evaluate(()=>window.cameraTracks.every(t=>t.readyState==='ended')),true);
   fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
   await page.screenshot({path:path.join(root,'test-results/video-preview-mobile.png')});
   await page.evaluate(()=>window.videoTest.failNext=true);
-  await page.getByRole('button',{name:'Отправить',exact:true}).click();await expect(page.locator('#send-error')).toContainText('Ответ потерялся');
+  await page.getByRole('button',{name:'Отправить',exact:true}).click();
+  await expect(page.locator('.outbox-row')).toHaveCount(1);
+  await expect.poll(()=>page.evaluate(()=>window.videoTest.starts)).toBe(1);
   await expect(page.locator('#offline-banner')).toBeHidden();
-  await expect(page.locator('#attachment-text')).toContainText('В общий чат');
-  const pending=await page.evaluate(async()=>{const {state}=await import('/js/core.js');return {room:state.attachment.room,peer:state.attachment.peer,path:state.attachment.path,nonce:state.attachment.nonce};});
-  await page.evaluate(async()=>{const {openRoom}=await import('/js/messages.js');openRoom('00000000-0000-4000-8000-000000000002');});
-  assert.equal(await page.evaluate(async()=>(await import('/js/core.js')).state.room),'main');
-  await page.evaluate(async()=>{(await import('/js/core.js')).state.room='00000000-0000-4000-8000-000000000002';});
-  await page.locator('#send-button').click();await expect(page.locator('#send-error')).toContainText('другого чата');
-  assert.equal(await page.evaluate(()=>window.videoTest.starts),1);
-  assert.deepEqual(await page.evaluate(async()=>{const {state}=await import('/js/core.js');return {room:state.attachment.room,peer:state.attachment.peer,path:state.attachment.path,nonce:state.attachment.nonce};}),pending);
-  await page.evaluate(async()=>{const {openRoom}=await import('/js/messages.js');openRoom('main');});
-  await page.locator('#send-button').click();await expect(page.locator('.video-note')).toBeVisible({timeout:25000});
-  await expect(page.locator('#attachment-bar')).toBeHidden({timeout:25000});
+  const pending=await page.evaluate(async()=>{const {state}=await import('/js/core.js');return (await (await import('/js/offline.js')).queuedMessages(state.user.id))[0];});
+  assert.equal(pending.room,'main');assert.equal(pending.peer,null);assert.ok(pending.path);assert.ok(pending.nonce);
+  await page.evaluate(async()=>{(await import('/js/messages.js')).openRoom('00000000-0000-4000-8000-000000000002');});
+  await expect(page.locator('.outbox-row')).toHaveCount(0);
+  await expect.poll(()=>page.evaluate(()=>window.videoTest.starts),{timeout:20000}).toBeGreaterThan(1);
+  await page.evaluate(async()=>{(await import('/js/messages.js')).openRoom('main');});
+  await expect(page.locator('.video-note')).toBeVisible({timeout:25000});
+  await expect(page.locator('#attachment-bar')).toBeHidden();
   const counts=await page.evaluate(()=>({uploads:window.videoTest.uploads,conversions:window.videoTest.conversions}));assert.deepEqual(counts,{uploads:1,conversions:1});
   assert.equal(await page.evaluate(()=>window.videoTest.startBodies.every(body=>body.peer===null)),true);
   await page.locator('.video-note').click();await expect(page.locator('.video-note')).toHaveClass(/playing/);
@@ -85,7 +91,7 @@ test('video UI: cancel, real camera preview, retry without duplicate, conversion
   await page.evaluate(async()=>{(await import('/js/messages.js')).openRoom('00000000-0000-4000-8000-000000000002');});
   await page.locator('#camera-button').click();await expect(page.getByRole('button',{name:'Начать запись',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Начать запись',exact:true}).click();await page.waitForTimeout(2200);await page.getByRole('button',{name:'Остановить',exact:true}).click();
-  await page.getByRole('button',{name:'Отправить',exact:true}).click();await expect(page.locator('#attachment-bar')).toBeHidden({timeout:25000});
+  await page.getByRole('button',{name:'Отправить',exact:true}).click();await expect(page.locator('.video-note')).toHaveCount(1,{timeout:25000});
   assert.equal(await page.evaluate(()=>window.videoTest.startBodies.at(-1).peer),'00000000-0000-4000-8000-000000000002');
   assert.equal(await page.evaluate(()=>window.videoTest.startBodies.at(-1).room),'00000000-0000-4000-8000-000000000002');
   await expect(page.locator('.video-note')).toHaveCount(1);

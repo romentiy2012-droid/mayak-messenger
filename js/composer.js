@@ -4,6 +4,7 @@ import {messageById, mergeMessages, connection,roomTitle} from './messages.js';
 import {followViewport} from './viewport.js';
 import {preparePhoto, prepareSticker, startRecording, canRecord, clock, rememberMedia} from './media.js';
 import {recordVideo,canRecordVideo,cancelVideoRecording} from './video.js';
+import {enqueue} from './outbox.js';
 
 let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
 let preparing = 0, choosingPhoto = false;
@@ -23,6 +24,7 @@ export function resizeComposer() {
   $('camera-button').hidden = !(window.MAYAK_CONFIG||{}).videoEnabled || !canRecordVideo() || filled || !!state.editing;
   $('camera-button').disabled = state.sending;
   $('attach-button').disabled = state.sending;
+  $('stickers-button').disabled = state.sending||!!state.editing;
   $('voice-button').disabled = state.sending;
   $('attachment-cancel').disabled = state.sending;
 }
@@ -43,9 +45,10 @@ function clearAttachment() {
   state.attachment = null; renderAttachment(); resizeComposer();
 }
 async function pickPhoto(file) {
-  preparing++;
+  const user=state.user?.id,room=state.room;preparing++;
   try {
     const item = await preparePhoto(file);
+    if(state.user?.id!==user||state.room!==room)return;item.room=room;
     clearAttachment();
     item.preview = URL.createObjectURL(item.blob); state.attachment = item;
     renderAttachment(); resizeComposer();
@@ -156,64 +159,38 @@ export function resetComposer(forget) {
   $('composer-context').hidden = true; $('send-error').hidden = true; resizeComposer();
 }
 
-async function submit(event) {
+export async function submit(event) {
   event.preventDefault();
-  const input = $('message-input'), text = input.value.trim();
-  if((!text && !state.attachment) || state.sending) return;
-  const submittingUser=state.user?.id;
-  state.sending = true; $('send-button').disabled = true; $('send-error').hidden = true;
+  const input=$('message-input'),text=input.value.trim(),user=state.user?.id,room=state.room;
+  if(!user||(!text&&!state.attachment)||state.sending)return;
+  state.sending=true;resizeComposer();$('send-error').hidden=true;
   try {
-    if(state.editing) {
-      const original = messageById(state.editing);
-      if(original && original.text !== text) mergeMessages([(await post('edit', {id:state.editing, text})).message], 'changed');
-      state.editing = null; restoreDraft(); renderContext();
-    } else if(state.attachment?.kind==='video') {
-      const item=state.attachment,userId=state.user.id;
-      if(!item.room||item.room!==state.room||item.peer!==(item.room===MAIN?null:item.room))throw Object.assign(new Error('Запись предназначена для другого чата. Вернитесь в «'+roomTitle(item.room)+'» или уберите вложение.'),{status:409});
-      if(!item.nonce)item.nonce=newNonce();
-      const persist=()=>prefs.set('pending-video:'+userId,JSON.stringify({room:item.room,peer:item.peer,reply:item.reply,nonce:item.nonce,path:item.path,job:item.job,meta:item.meta}));
-      if(!item.path){item.path=await window.MayakCloud.videoUpload(item.blob,item.extension);persist();}
-      const started=await post('video-start',{file:item.path,nonce:item.nonce,room:item.room,peer:item.peer||null,reply:item.reply||null});item.job=started.job.id;persist();
-      const waitingSince=Date.now();let result;
-      while(state.user?.id===userId){
-        result=await post('video-status',{id:item.job});
-        if(result.job.state==='sent')break;
-        if(['failed','cancelled'].includes(result.job.state))throw Object.assign(new Error(result.job.error||'Запись отменена.'),{status:422});
-        $('attachment-text').textContent=videoDestination(item)+' · Видео обрабатывается…';
-        if(Date.now()-waitingSince>135000)throw Object.assign(new Error('Видео ещё обрабатывается. Повторите отправку чуть позже — дубля не будет.'),{status:408});
-        await new Promise(resolve=>setTimeout(resolve,1500));
-      }
-      if(state.user?.id!==userId)return;
-      prefs.set('pending-video:'+userId,null);
-      if(state.attachment===item)clearAttachment();
-      state.reply=null;renderContext();saveDraft();mergeMessages([result.message],'sent');
-    } else if(state.attachment) {
-      // Сначала файл уходит в хранилище, потом создаётся сообщение. Путь и номер отправки запоминаются:
-      // если связь оборвалась на втором шаге, повтор не загружает файл заново и не создаёт дубль.
-      const item = state.attachment;
-      if(item.sticker && item.room!==state.room)throw Object.assign(new Error('Стикер выбран для другого чата. Вернитесь в него или уберите вложение.'),{status:409});
-      if(!item.nonce) item.nonce = newNonce();
-      if(!item.path) {item.path = await window.MayakCloud.upload(item.blob, item.extension, undefined, item.sticker ? 'sticker-' : ''); rememberMedia(item.path, item.blob);} // свой файл не скачиваем обратно
-      const result = await post('attach', {kind:item.kind, file:item.path, meta:item.meta, text:item.kind === 'photo' && !item.sticker ? text : '', nonce:item.nonce, reply:state.reply || null, peer:roomPeer()});
-      if(item.kind === 'photo' && !item.sticker) input.value = '';
-      state.draft = null; state.reply = null; typingSent = 0;
-      clearAttachment(); saveDraft(); renderContext(); mergeMessages([result.message], 'sent');
-    } else {
-      const reply = state.reply || null;
-      if(!state.draft || state.draft.text !== text || state.draft.reply !== reply) state.draft = {text, reply, nonce:newNonce()};
+    if(state.editing){
+      const original=messageById(state.editing);
+      if(original&&original.text!==text)mergeMessages([(await post('edit',{id:state.editing,text})).message],'changed');
+      if(state.user?.id!==user||state.room!==room)return;
+      state.editing=null;restoreDraft();renderContext();
+    }else{
+      const item=state.attachment,reply=item?.kind==='video'?item.reply:state.reply;
+      if(item?.room&&item.room!==room)throw Object.assign(new Error('Вложение предназначено для другого чата. Вернись в него или убери вложение.'),{status:409});
+      if(!state.draft||state.draft.text!==text||state.draft.reply!==(reply||null))state.draft={text,reply:reply||null,nonce:newNonce()};
+      const nonce=item?(item.nonce||(item.nonce=newNonce())):state.draft.nonce;
+      const queued={kind:item?.kind||'text',room,peer:room===MAIN?null:room,reply:reply||null,nonce,text:item&&!(item.kind==='photo'&&!item.sticker)?'':text};
+      if(item)Object.assign(queued,{blob:item.blob,extension:item.extension,meta:item.meta,sticker:!!item.sticker,path:item.path,job:item.job});
       saveDraft();
-      const result = await post('messages', {...state.draft, peer:roomPeer()});
-      input.value = ''; state.draft = null; state.reply = null; typingSent = 0;
-      saveDraft(); renderContext(); mergeMessages([result.message], 'sent');
+      const accepted=await enqueue(queued);if(!accepted||state.user?.id!==user)return;
+      if(item?.kind==='video')prefs.set('pending-video:'+user,null);
+      if(state.room===room){
+        if(!item||item.kind==='photo'&&!item.sticker){if(input.value.trim()===text)input.value='';}
+        if(state.attachment===item)clearAttachment();
+        state.draft=null;state.reply=null;typingSent=0;saveDraft();renderContext();
+      }
     }
-    connection(true);
-  } catch(error) {
-    if(state.user?.id!==submittingUser)return;
-    $('send-error').textContent = error.status ? error.message : state.attachment?.kind==='video'?'Отправка прервалась. Нажмите отправить ещё раз — готовая запись не продублируется.':'Не отправлено. Текст сохранён — нажмите отправить ещё раз, когда связь вернётся.';
-    if(state.attachment?.kind==='video')$('attachment-text').textContent=videoDestination(state.attachment)+' · Не отправлено — можно повторить';
-    // A returned HTTP error still proves the cloud is reachable; keep the retryable attachment.
-    $('send-error').hidden = false; connection(!!error.status);
-  } finally {if(!state.user||state.user.id===submittingUser){state.sending = false; resizeComposer();}}
+  }catch(error){
+    if(state.user?.id!==user)return;
+    $('send-error').textContent=error.message||'Не удалось сохранить отправку. Повтори ещё раз.';$('send-error').hidden=false;
+    if(!error.status)connection(false);
+  }finally{if(state.user?.id===user){state.sending=false;resizeComposer();}}
 }
 
 export function initComposer() {

@@ -17,7 +17,7 @@ const hash = new URLSearchParams(location.hash.slice(1));
 // Чаты: общий (MAIN) и личные — ключом личного служит id собеседника.
 export const MAIN = 'main';
 export const state = {
-  user:null, messages:[], people:[], rev:0, online:false,
+  user:null, messages:[], people:[], rev:0, online:false, verified:false,
   room:MAIN,      // открытый сейчас чат
   older:{},       // по чатам: есть ли ещё не загруженная история
   read:{},        // по чатам: до какого сообщения я прочитал

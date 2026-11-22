@@ -187,7 +187,7 @@ test('received video: touch playback, reactions, reply, swipe, cancellation and 
    const canvas=document.createElement('canvas');canvas.width=canvas.height=2;
    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
    rememberMedia('synthetic/photo.png',blob);
-   const cache=await caches.open('mayak-media');await cache.put(location.origin+'/__media/synthetic/photo.png',new Response(blob));
+   const cache=await caches.open('mayak-media');await cache.put(location.origin+'/__media/00000000-0000-4000-8000-000000000002/synthetic/photo.png',new Response(blob));
    mergeMessages([{id:500,rev:500,user_id:peer,name:'Тестовый собеседник',text:'Подпись остаётся в чате',kind:'photo',file:'synthetic/photo.png',file_meta:{caption:true,w:2,h:2},created:new Date().toISOString(),reactions:{},peer_a:guest,peer_b:peer}], 'new');
   },{guest:GUEST,peer:PEER});
   const photo=desktopPage.locator('[data-id="500"]');await photo.locator('.message-photo').click();await expect(desktopPage.locator('#viewer-layer')).toBeVisible();
@@ -196,13 +196,13 @@ test('received video: touch playback, reactions, reply, swipe, cancellation and 
    mergeMessages([{...message,file:null,file_meta:{...message.file_meta,removed:true},rev:501}], 'new');
   });
   await expect(desktopPage.locator('#viewer-layer')).toBeHidden();await expect(photo).toContainText('Файл удалён из хранилища');await expect(photo).toContainText('Подпись остаётся в чате');
-  await expect.poll(()=>desktopPage.evaluate(async()=>Boolean(await (await caches.open('mayak-media')).match(location.origin+'/__media/synthetic/photo.png')))).toBe(false);
+  await expect.poll(()=>desktopPage.evaluate(async()=>Boolean(await (await caches.open('mayak-media')).match(location.origin+'/__media/00000000-0000-4000-8000-000000000002/synthetic/photo.png')))).toBe(false);
   // A download completing after invalidation must not repopulate the cache or yield a new blob URL.
   assert.equal(await desktopPage.evaluate(async()=>{
    let finish;window.MayakCloud.download=()=>new Promise(resolve=>{finish=resolve;});
    const {mediaURL,forgetMedia}=await import('/js/media.js'),pending=mediaURL('synthetic/late.png').then(()=>false,()=>true);
    while(!finish)await new Promise(resolve=>setTimeout(resolve,0));forgetMedia('synthetic/late.png');finish(new Blob(['synthetic'],{type:'image/png'}));
-   return await pending&&!await (await caches.open('mayak-media')).match(location.origin+'/__media/synthetic/late.png');
+   return await pending&&!await (await caches.open('mayak-media')).match(location.origin+'/__media/00000000-0000-4000-8000-000000000002/synthetic/late.png');
   }),true);
   assert.deepEqual(errors,[]);
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(temporary,{recursive:true,force:true});}
