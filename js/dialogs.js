@@ -22,8 +22,6 @@ function attachmentDialog(){
  if(!state.user||state.sending||state.editing)return;
  const content=dialog('Добавить в чат');
  content.appendChild(button('Фото',()=>{closeDialog();$('photo-input').click();},'primary-button'));
- const stickers=button('Стикеры',()=>{const body=dialog('Мои стикеры');cleanup=stickerCollection(body,closeDialog);},'primary-button');
- stickers.disabled=!!state.attachment;content.appendChild(stickers);
  const create=button('Опрос',()=>{
   const user=state.user.id,room=state.room,reply=state.reply||null,body=dialog('Новый опрос');
   body.appendChild(element('p','about-note',room===MAIN?'В общий чат':'Лично: '+roomTitle(room)));
@@ -167,7 +165,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.20.0 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.20.1 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
