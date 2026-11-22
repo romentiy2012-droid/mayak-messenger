@@ -189,11 +189,12 @@
   }
   // Файлы вложений: закрытый бакет, у каждого участника своя папка.
   const BUCKET='mayak';
-  async function upload(blob,extension,bucket=BUCKET){
+  async function upload(blob,extension,bucket=BUCKET,prefix=''){
     const auth=unwrap(await db().auth.getSession());
     if(!auth.session) throw fail('Войдите в чат.',401);
     const random=new Uint8Array(12);crypto.getRandomValues(random);
-    const path=auth.session.user.id+'/'+Array.from(random,b=>b.toString(16).padStart(2,'0')).join('')+'.'+extension;
+    if(prefix && prefix!=='sticker-')throw fail('Неверный тип вложения.');
+    const path=auth.session.user.id+'/'+prefix+Array.from(random,b=>b.toString(16).padStart(2,'0')).join('')+'.'+extension;
     const result=await db().storage.from(bucket).upload(path,blob,{contentType:blob.type,cacheControl:bucket===BUCKET?'31536000':'0',upsert:false});
     if(result.error){
       const status=Number(result.error.statusCode||result.error.status)||0;

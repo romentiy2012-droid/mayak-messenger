@@ -26,6 +26,9 @@ test('photo and voice messages: own files only, safe metadata, no editing, delet
  const bare=await attach('photo',owner+'/abcdefgh5678.webp',{w:99999,h:-5},'','p2',photo.id);
  assert.equal(bare.text,'📷 Фото');assert.equal(bare.meta.caption,false);assert.equal(bare.meta.w,10000);assert.equal(bare.meta.h,0);assert.equal(bare.reply,photo.id);
  await pause();
+ const sticker=await attach('photo',owner+'/sticker-aaaaaaaaaaaaaaaaaaaaaaaa.png',{w:512,h:256,size:10000,mime:'image/png'},'','sticker1');
+ assert.equal(sticker.kind,'photo');assert.equal(sticker.meta.mime,'image/png');assert.equal(sticker.meta.caption,false);assert.match(sticker.file,/\/sticker-[a-f0-9]{24}\.png$/);
+ await pause();
  const voice=await attach('voice',owner+'/voice_ABCDEFGH.m4a',{duration:12.4,size:40000,mime:'audio/mp4'},'подпись не нужна','v1');
  assert.equal(voice.text,'🎤 Голосовое сообщение');assert.equal(voice.meta.caption,false);assert.equal(Number(voice.meta.duration),12.4);
  // Чужая папка, обход пути, неизвестный вид, повтор файла.
@@ -42,7 +45,7 @@ test('photo and voice messages: own files only, safe metadata, no editing, delet
  assert.equal((await one('select public.mayak_push_claim($1) as job',[voice.id])).job.body,'🎤 Голосовое сообщение');
  // Гость видит вложения, но удалить чужое не может; автор удаляет — файл из сообщения пропадает.
  await as(guest);
- assert.equal((await db.query("select 1 from public.mayak_messages where kind in ('photo','voice')")).rows.length,3);
+ assert.equal((await db.query("select 1 from public.mayak_messages where kind in ('photo','voice')")).rows.length,4);
  await assert.rejects(db.query('select public.mayak_delete($1)',[photo.id]));
  await as(owner);
  const gone=await one('select (m).file as file,(m).file_meta as meta,(m).text as text,(m).deleted as deleted,(m).kind as kind from public.mayak_delete($1) m',[photo.id]);

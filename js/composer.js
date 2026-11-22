@@ -2,7 +2,7 @@
 import {$, state, post, prefs, snippet, toast, MAIN, roomPeer} from './core.js';
 import {messageById, mergeMessages, connection,roomTitle} from './messages.js';
 import {followViewport} from './viewport.js';
-import {preparePhoto, startRecording, canRecord, clock, rememberMedia} from './media.js';
+import {preparePhoto, prepareSticker, startRecording, canRecord, clock, rememberMedia} from './media.js';
 import {recordVideo,canRecordVideo,cancelVideoRecording} from './video.js';
 
 let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
@@ -32,8 +32,8 @@ function renderAttachment() {
   $('attachment-bar').hidden = !item;
   if(!item) {$('attachment-thumb').removeAttribute('src'); return;}
   const photo = item.kind === 'photo';
-  $('attachment-title').textContent = photo ? 'Фото' : (item.kind==='video'?'Видеокружочек':'Голосовое') + ' · ' + clock(item.meta.duration);
-  $('attachment-text').textContent = item.kind==='video' ? videoDestination(item)+' · Не отправлено' : photo ? 'Добавьте подпись или отправьте так' : 'Не отправлено — нажмите «отправить»';
+  $('attachment-title').textContent = item.sticker ? 'Стикер' : photo ? 'Фото' : (item.kind==='video'?'Видеокружочек':'Голосовое') + ' · ' + clock(item.meta.duration);
+  $('attachment-text').textContent = item.sticker ? 'Нажмите «отправить»' : item.kind==='video' ? videoDestination(item)+' · Не отправлено' : photo ? 'Добавьте подпись или отправьте так' : 'Не отправлено — нажмите «отправить»';
   $('attachment-thumb').hidden = !photo;
   if(photo) $('attachment-thumb').src = item.preview;
 }
@@ -50,6 +50,15 @@ async function pickPhoto(file) {
     item.preview = URL.createObjectURL(item.blob); state.attachment = item;
     renderAttachment(); resizeComposer();
   } catch(error) {toast(error.message);} finally {preparing--;}
+}
+export async function attachSticker(file) {
+  if(!state.user || state.editing || state.sending || recording || preparing || state.attachment) {toast('Сначала отправьте или уберите текущее вложение.');return false;}
+  const user=state.user.id, room=state.room; preparing++;
+  try {
+    const item=await prepareSticker(file);
+    if(state.user?.id!==user || state.room!==room || state.sending || state.editing || state.attachment) return false;
+    item.room=room;item.preview=URL.createObjectURL(item.blob);state.attachment=item;renderAttachment();resizeComposer();return true;
+  } catch(error) {toast(error.message);return false;} finally {preparing--;}
 }
 function recordTick() {
   if(!recording) return;
@@ -182,10 +191,11 @@ async function submit(event) {
       // Сначала файл уходит в хранилище, потом создаётся сообщение. Путь и номер отправки запоминаются:
       // если связь оборвалась на втором шаге, повтор не загружает файл заново и не создаёт дубль.
       const item = state.attachment;
+      if(item.sticker && item.room!==state.room)throw Object.assign(new Error('Стикер выбран для другого чата. Вернитесь в него или уберите вложение.'),{status:409});
       if(!item.nonce) item.nonce = newNonce();
-      if(!item.path) {item.path = await window.MayakCloud.upload(item.blob, item.extension); rememberMedia(item.path, item.blob);} // свой файл не скачиваем обратно
-      const result = await post('attach', {kind:item.kind, file:item.path, meta:item.meta, text:item.kind === 'photo' ? text : '', nonce:item.nonce, reply:state.reply || null, peer:roomPeer()});
-      if(item.kind === 'photo') input.value = '';
+      if(!item.path) {item.path = await window.MayakCloud.upload(item.blob, item.extension, undefined, item.sticker ? 'sticker-' : ''); rememberMedia(item.path, item.blob);} // свой файл не скачиваем обратно
+      const result = await post('attach', {kind:item.kind, file:item.path, meta:item.meta, text:item.kind === 'photo' && !item.sticker ? text : '', nonce:item.nonce, reply:state.reply || null, peer:roomPeer()});
+      if(item.kind === 'photo' && !item.sticker) input.value = '';
       state.draft = null; state.reply = null; typingSent = 0;
       clearAttachment(); saveDraft(); renderContext(); mergeMessages([result.message], 'sent');
     } else {
@@ -210,6 +220,11 @@ export function initComposer() {
   const input = $('message-input');
   $('message-form').addEventListener('submit', submit);
   input.addEventListener('input', () => {resizeComposer(); typingSignal(); clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 300);});
+  input.addEventListener('paste', event => {
+    const files=[...(event.clipboardData?.items || [])].filter(item=>item.kind==='file' && item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);
+    if(!files.length) return;
+    event.preventDefault(); attachSticker(files[0]);
+  });
   input.addEventListener('keydown', event => {
     if(event.key === 'Enter' && !event.shiftKey && window.innerWidth > 760 && !event.isComposing) {
       event.preventDefault();

@@ -7,6 +7,7 @@ import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia, nextSpeed}
 import {stopVideo,forgetVideo} from './video.js';
 import {showMessageMenu, setMessageMenuPanels, hideMessageMenu} from './message-menu.js';
 import {openMessageDetails} from './message-details.js';
+import {saveStickerFromMessage} from './stickers.js';
 
 const QUICK = ['👍','❤️','😂','😮','😢','🙏'];
 // Остальные смайлы — по кнопке «＋». Любой другой можно ввести с клавиатуры в поле под ними.
@@ -90,6 +91,7 @@ function openSheet(id, reuse = false) {
   const actions = element('div', 'sheet-actions sheet-panel');
   actions.appendChild(menuAction('Ответить', () => {closeSheet(); startReply(id);}, 'reply'));
   const kind = message.kind || 'text', plain = kind === 'text';
+  if(kind === 'photo' && message.file) actions.appendChild(menuAction('Сохранить как стикер', () => {closeSheet(); saveStickerFromMessage(message);}, 'people'));
   if(plain || (message.file_meta || {}).caption) actions.appendChild(menuAction('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'copy'));
   const own = message.user_id === state.user.id;
   if(Object.keys(message.reactions || {}).length) actions.appendChild(menuAction('Кто отреагировал', () => {closeSheet(); openMessageDetails(id);}, 'people'));

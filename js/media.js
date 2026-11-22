@@ -31,6 +31,12 @@ export function mediaURL(path, voice = false) {
   }
   return urls.get(path);
 }
+export async function mediaBlob(path) {
+  await mediaURL(path);
+  const item = ready.get(path);
+  if(!item?.blob) throw new Error('Файл недоступен.');
+  return item.blob;
+}
 // Только что отправленный файл уже есть на устройстве — показываем его без скачивания.
 export function rememberMedia(path, blob) {const url = URL.createObjectURL(blob); ready.set(path, {url, blob}); urls.set(path, Promise.resolve(url)); voiceTimings.delete(path);}
 export function forgetMedia(path) {
@@ -71,10 +77,28 @@ export async function preparePhoto(file) {
   if(!blob) throw new Error('Не удалось подготовить фото.');
   return {kind:'photo', blob, extension:'jpg', meta:{w:canvas.width, h:canvas.height, size:blob.size, mime:'image/jpeg'}};
 }
+// PNG сохраняет прозрачные края стикера; анимированные изображения пока становятся статичными.
+export async function prepareSticker(file) {
+  if(!file || !/^image\//.test(file.type || '')) throw new Error('Выберите изображение для стикера.');
+  if(file.size > 16 * 1024 * 1024) throw new Error('Картинка слишком большая для стикера.');
+  let image;
+  try {image = await decode(file);} catch(_error) {throw new Error('Не удалось прочитать стикер.');}
+  try {
+    const width=image.width || image.naturalWidth, height=image.height || image.naturalHeight;
+    if(!width || !height || width * height > 40000000) throw new Error('Не удалось прочитать стикер.');
+    const scale=Math.min(1,512/Math.max(width,height)),canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+    canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    if(!blob || blob.size>4*1024*1024)throw new Error('Не удалось подготовить стикер.');
+    return {kind:'photo',sticker:true,blob,extension:'png',meta:{w:canvas.width,h:canvas.height,size:blob.size,mime:'image/png'}};
+  } finally {if(image.close) image.close();}
+}
+export function isSticker(message) {return message?.kind==='photo' && /\/sticker-[a-f0-9]{24}\.png$/.test(message.file || '') && message.file_meta?.mime==='image/png';}
 export function photoNode(message) {
   const meta = message.file_meta || {};
   // Не кнопка, а блок: долгое нажатие на фото должно открывать меню сообщения, как и на тексте.
-  const frame = element('div', 'message-photo'); frame.dataset.photo = message.id;
+  const frame = element('div', 'message-photo' + (isSticker(message) ? ' message-sticker' : '')); frame.dataset.photo = message.id;
   frame.setAttribute('role', 'button'); frame.tabIndex = 0; frame.setAttribute('aria-label', 'Открыть фото');
   if(meta.w > 0 && meta.h > 0) frame.style.aspectRatio = meta.w + ' / ' + meta.h; // место под фото — заранее, чтобы лента не прыгала
   const image = element('img'); image.alt = 'Фото'; image.decoding = 'async'; image.draggable = false;

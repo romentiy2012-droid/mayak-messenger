@@ -1,6 +1,6 @@
 {
   "name": "mayak-messenger",
-  "version": "2.18.0",
+  "version": "2.19.0",
   "description": "Маяк — закрытый облачный PWA-чат",
   "main": "app.js",
   "directories": {
@@ -17,6 +17,7 @@
     "test:message-menu-ui": "node --test tests/message-menu-ui.cjs",
     "test:storage-ui": "node --test tests/storage-ui.cjs",
     "test:video-worker": "npm test --prefix video-worker",
+    "test:stickers-ui": "node --test tests/stickers-ui.cjs",
     "test:message-details-ui": "node --test tests/message-details-ui.cjs",
     "test:session-ui": "node --test tests/session-ui.cjs",
     "test:updates-ui": "node --test tests/updates-ui.cjs",

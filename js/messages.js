@@ -303,6 +303,7 @@ export function openRoom(room) {
   if(room === state.room) return;
   saveDraft(); stopTyping(); stopVoice();stopVideo();
   state.room = room; state.reply = null; state.editing = null;
+  document.dispatchEvent(new Event('mayak-context-changed'));
   if(!(room in state.older)) state.older[room] = room !== MAIN && state.directFull; // история личного чата могла не уместиться в первую загрузку
   restoreDraft(); renderContext();
   rows.clear(); // у строк другой состав — собрать ленту заново
