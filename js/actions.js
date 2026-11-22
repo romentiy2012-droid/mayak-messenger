@@ -6,6 +6,7 @@ import {scrollBottom} from './viewport.js';
 import {openViewer, closeViewer, toggleVoice, stopVoice, forgetMedia, nextSpeed} from './media.js';
 import {stopVideo,forgetVideo} from './video.js';
 import {showMessageMenu, setMessageMenuPanels, hideMessageMenu} from './message-menu.js';
+import {openMessageDetails} from './message-details.js';
 
 const QUICK = ['👍','❤️','😂','😮','😢','🙏'];
 // Остальные смайлы — по кнопке «＋». Любой другой можно ввести с клавиатуры в поле под ними.
@@ -53,6 +54,8 @@ function menuAction(label, action, icon, danger = false) {
   svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); path.setAttribute('d', ICONS[icon]); svg.appendChild(path); item.appendChild(svg);
   return item;
 }
+ICONS.people = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M12 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
+ICONS.readers = 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0';
 // Палитра раскрывается над выбранным сообщением, без перехода в отдельное окно.
 function emojiSheet(id) {
   const message = messageById(id);
@@ -89,6 +92,8 @@ function openSheet(id, reuse = false) {
   const kind = message.kind || 'text', plain = kind === 'text';
   if(plain || (message.file_meta || {}).caption) actions.appendChild(menuAction('Скопировать текст', () => {closeSheet(); copyText(message.text).then(() => toast('Скопировано')).catch(error => toast(error.message));}, 'copy'));
   const own = message.user_id === state.user.id;
+  if(Object.keys(message.reactions || {}).length) actions.appendChild(menuAction('Кто отреагировал', () => {closeSheet(); openMessageDetails(id);}, 'people'));
+  if(own) actions.appendChild(menuAction('Кто прочитал', () => {closeSheet(); openMessageDetails(id, 'readers');}, 'readers'));
   if(own && plain) actions.appendChild(menuAction('Изменить', () => {closeSheet(); startEdit(id);}, 'edit'));
   // Своё сообщение удаляет автор; любое в общем чате — админ. В личных чатах админских прав нет.
   if(own || (state.user.owner && roomOf(message) === MAIN)) {
@@ -124,7 +129,8 @@ export function initActions() {
   // Нажатие на цитату, реакцию и «⋯»; правая кнопка мыши; долгое нажатие и смахивание влево на телефоне.
   list.addEventListener('click', event => {
     const quote = event.target.closest('[data-jump]'); if(quote) {jumpTo(Number(quote.dataset.jump)); return;}
-    const chip = event.target.closest('[data-react]'); if(chip) {react(rowId(chip), chip.dataset.react); return;}
+    const chip = event.target.closest('[data-react]'); if(chip) {openMessageDetails(rowId(chip), 'reactions', chip.dataset.react, chip); return;}
+    const receipt = event.target.closest('[data-readers]'); if(receipt) {openMessageDetails(rowId(receipt), 'readers', '', receipt); return;}
     const more = event.target.closest('.message-more'); if(more) {openSheet(rowId(more)); return;}
     const speed = event.target.closest('.voice-speed'); if(speed) {nextSpeed(); return;}
     const play = event.target.closest('.voice-play'); if(play) {toggleVoice(rowId(play)).catch(error => toast(error.message)); return;}

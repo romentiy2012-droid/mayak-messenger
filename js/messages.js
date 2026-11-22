@@ -6,6 +6,7 @@ import {renderContext, saveDraft, restoreDraft, stopTyping} from './composer.js'
 import {photoNode, voiceNode, stopVoice, forgetMedia, closeViewer} from './media.js';
 import {videoNode,stopVideo,forgetVideo} from './video.js';
 import {pollNode,resetPolls} from './polls.js';
+import {messageReaders, refreshMessageDetails, closeMessageDetails} from './message-details.js';
 
 const typing = new Map(); // ключ «чат|участник» → таймер
 let readTimer = null, mainName = 'Наш круг';
@@ -13,13 +14,6 @@ let readTimer = null, mainName = 'Наш круг';
 export function messageById(id) {return state.messages.find(message => message.id === id);}
 const inRoom = room => state.messages.filter(message => roomOf(message) === room);
 const personById = id => state.people.find(person => person.id === id);
-const peerState = peer => state.reads.find(row => row.user_id === peer && row.peer === state.user.id);
-// Прочитал ли сообщение кто-то кроме меня: в общем чате — любой участник, в личном — собеседник.
-function readByOthers(message) {
-  const room = roomOf(message);
-  if(room === MAIN) return state.people.some(person => person.id !== state.user.id && Number(person.last_read) >= message.id);
-  const row = peerState(room); return !!row && Number(row.last_read) >= message.id;
-}
 export function unreadIn(room) {
   const mark = state.read[room] || 0;
   return state.messages.filter(message => message.id > mark && roomOf(message) === room && message.user_id !== state.user.id && !message.deleted && message.kind !== 'system').length;
@@ -57,6 +51,7 @@ export function connection(online) {
     node.appendChild(document.createTextNode(busy ? (room === MAIN ? writers.join(', ') + (writers.length > 1 ? ' печатают…' : ' печатает…') : 'печатает…') : idle));
   });
   $('offline-banner').hidden = online || !state.user;
+  refreshMessageDetails();
 }
 export function setTyping(room, id, on) {
   const key = room + '|' + id;
@@ -88,9 +83,15 @@ function textWithLinks(node, text) {
 // Лента обновляется по частям: строка сообщения пересоздаётся, только если изменилось то, что в ней видно.
 // Остальные остаются на месте, поэтому жест или выделение на них не прерывается.
 const rows = new Map(), dividers = new Map();
-export function resetList() {resetPolls();rows.clear(); dividers.clear(); $('messages').replaceChildren();}
+export function resetList() {closeMessageDetails(false);resetPolls();rows.clear(); dividers.clear(); $('messages').replaceChildren();}
 function isOwner(id) {return !!id && state.people.some(person => person.id === id && person.owner);}
-function buildRow(message, source, read, admin) {
+function paintReceipt(tick, count) {
+  const text = count ? '✓✓ ' + count : '✓';
+  if(tick.textContent !== text) tick.textContent = text;
+  tick.classList.toggle('read', count > 0);
+  tick.setAttribute('aria-label', 'Кто прочитал сообщение: ' + count);
+}
+function buildRow(message, source, readers, admin) {
   // Служебная строка («Имя добавлен в чат») — по центру, как разделитель дня, без автора и действий.
   if(message.kind === 'system') {
     const note = element('div', 'system-note'); note.dataset.id = message.id; note.appendChild(element('span', '', message.text));
@@ -133,7 +134,10 @@ function buildRow(message, source, read, admin) {
   const time = element('time', '', new Date(message.created).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}));
   time.dateTime = message.created; stamp.appendChild(time);
   if(own && !gone && kind === 'voice' && (message.heard || []).length) stamp.appendChild(element('span', 'heard-mark', 'прослушано'));
-  if(own && !gone) {const tick = element('span', 'delivery-tick' + (read ? ' read' : ''), read ? '✓✓' : '✓'); tick.title = read ? 'Прочитано' : 'Отправлено'; stamp.appendChild(tick);}
+  if(own && !gone) {
+    const tick = element('button', 'delivery-tick message-readers');
+    tick.type = 'button'; tick.dataset.readers = message.id; tick.title = 'Кто прочитал'; paintReceipt(tick, readers); stamp.appendChild(tick);
+  }
   bubble.appendChild(stamp); row.appendChild(bubble);
   if(!gone) {const more = element('button', 'message-more', '⋯'); more.type = 'button'; more.setAttribute('aria-label', 'Действия с сообщением'); row.appendChild(more);}
   return row;
@@ -155,11 +159,13 @@ export function renderMessages(mode) {
       days.add(key); wanted.push(divider);
     }
     const source = message.reply_to ? byId.get(message.reply_to) : null;
-    const read = message.user_id === state.user.id && !message.deleted && readByOthers(message);
+    const readers = message.user_id === state.user.id && !message.deleted ? messageReaders(message).length : 0;
     const admin = isOwner(message.user_id);
-    const signature = [message.rev || 0, message.name, read ? 1 : 0, source ? (source.rev || 0) + ':' + source.name : '-', state.user.id, admin ? 1 : 0, state.user.owner ? 1 : 0].join('|');
+    const signature = [message.rev || 0, message.name, source ? (source.rev || 0) + ':' + source.name : '-', state.user.id, admin ? 1 : 0, state.user.owner ? 1 : 0].join('|');
     let entry = rows.get(message.id);
-    if(!entry || entry.signature !== signature) {entry = {signature, node:buildRow(message, source, read, admin)}; rows.set(message.id, entry);}
+    if(!entry || entry.signature !== signature) {entry = {signature, node:buildRow(message, source, readers, admin)}; rows.set(message.id, entry);}
+    // Новая отметка чтения меняет только кнопку: фото/кружочек/плеер остаются на месте.
+    const receipt = entry.node.querySelector('[data-readers]'); if(receipt) paintReceipt(receipt, readers);
     wanted.push(entry.node);
   });
   rows.forEach((_entry, id) => {if(!visible.has(id)) rows.delete(id);});
@@ -172,6 +178,7 @@ export function renderMessages(mode) {
   $('empty-title').textContent = state.room === MAIN ? 'Первое сообщение — за вами' : 'Личный чат';
   $('empty-text').textContent = state.room === MAIN ? 'Поздоровайтесь с друзьями. С этого начнётся ваша переписка.' : 'Эту переписку видите только вы и ' + roomTitle(state.room) + '.';
   $('thread-label').textContent = state.room === MAIN ? 'ВАШ МАЛЕНЬКИЙ КРУГ' : 'ЛИЧНЫЙ ЧАТ · ВИДИТЕ ТОЛЬКО ВЫ ДВОЕ';
+  refreshMessageDetails();
   $('older-button').hidden = !state.older[state.room];
   if(mode === 'older') scroll.scrollTop = previousTop + scroll.scrollHeight - previousHeight;
   else if(atBottom || mode === 'initial' || mode === 'sent') scrollBottom();
