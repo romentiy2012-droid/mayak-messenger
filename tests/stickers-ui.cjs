@@ -21,6 +21,38 @@ async function fixture(){
 async function transparentPNG(page){return page.evaluate(async()=>{const c=document.createElement('canvas');c.width=100;c.height=80;const x=c.getContext('2d');x.fillStyle='#f00';x.fillRect(30,20,40,40);const blob=await new Promise(r=>c.toBlob(r,'image/png'));return Array.from(new Uint8Array(await blob.arrayBuffer()));});}
 async function collection(page){await page.locator('#stickers-button').tap();await expect(page.locator('#dialog-title')).toHaveText('Мои стикеры');}
 
+test('reopened sticker collection stays stable with Safari viewport panning and still fits its keyboard',{timeout:45000},async()=>{
+ const f=await fixture(),{page}=f;
+ try{
+  const bytes=await transparentPNG(page);await page.evaluate(async bytes=>{await (await import('/js/composer.js')).attachSticker(new Blob([new Uint8Array(bytes)],{type:'image/png'}));},bytes);
+  await page.locator('#send-button').tap();await expect(page.locator('#messages .message-sticker img')).toBeVisible();
+  await page.locator('#message-input').fill('Сохранённый черновик');
+  await page.evaluate(()=>{
+   // Safari can pan the visual viewport back after a script tries to reset its scroll.
+   // Model that feedback, rather than replacing the application's viewport handler.
+   const view=visualViewport,scroll=window.scrollTo;
+   window.stickerViewport={height:804,offset:40,resets:0,scroll};
+   Object.defineProperties(view,{height:{configurable:true,get:()=>window.stickerViewport.height},offsetTop:{configurable:true,get:()=>window.stickerViewport.offset}});
+   window.scrollTo=(...args)=>{const p=window.stickerViewport;if(document.querySelector('#dialog-layer').hidden)return scroll.apply(window,args);p.resets++;if(p.resets>12)return;requestAnimationFrame(()=>{p.offset=0;p.height=844;view.dispatchEvent(new Event('scroll'));requestAnimationFrame(()=>{p.offset=40;p.height=804;view.dispatchEvent(new Event('scroll'));});});};
+  });
+  // Safari does not always focus a tapped button: the text field may still own focus.
+  await page.locator('#stickers-button').evaluate(node=>node.click());await expect(page.locator('#dialog-title')).toHaveText('Мои стикеры');
+  const motion=await page.evaluate(()=>new Promise(resolve=>{const tops=[],until=performance.now()+1200;function sample(){tops.push(document.querySelector('.dialog-card').getBoundingClientRect().top);if(performance.now()<until)requestAnimationFrame(sample);else resolve({range:Math.max(...tops)-Math.min(...tops),resets:window.stickerViewport.resets});}sample();}));
+  assert.ok(motion.range<2,JSON.stringify(motion));assert.equal(motion.resets,0);
+  console.log(JSON.stringify({stickerViewport:motion}));
+  await page.screenshot({path:path.join(root,'test-results/sticker-dialog-stable-fixed.png')});
+  const field=page.getByRole('textbox',{name:'Вставить стикер с клавиатуры'});await field.focus();
+  assert.ok(await field.evaluate(n=>parseFloat(getComputedStyle(n).fontSize)>=16));
+  await page.evaluate(()=>{Object.assign(window.stickerViewport,{height:344,offset:38});visualViewport.dispatchEvent(new Event('resize'));});
+  await expect.poll(()=>field.evaluate(n=>{const r=n.getBoundingClientRect(),c=n.closest('.dialog-card').getBoundingClientRect();return c.bottom<=visualViewport.offsetTop+visualViewport.height&&r.top>=c.top+8&&r.bottom<=c.bottom-8;})).toBe(true);
+  await field.blur();await page.evaluate(()=>{const p=window.stickerViewport;window.scrollTo=p.scroll;delete visualViewport.height;delete visualViewport.offsetTop;visualViewport.dispatchEvent(new Event('resize'));});
+  await page.locator('#dialog-close').tap();await expect(page.locator('#message-input')).toHaveValue('Сохранённый черновик');
+  await expect(page.locator('#stickers-button')).toBeFocused();
+  for(let i=0;i<3;i++){await collection(page);await page.locator('#dialog-close').tap();}
+  assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
+
 test('paste sticker, preserve text and transparency, send and save received sticker',{timeout:60000},async()=>{
  const f=await fixture(),{page}=f;
  try{

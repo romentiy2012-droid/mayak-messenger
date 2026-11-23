@@ -505,3 +505,8 @@ html[data-skin="terminal"] .poll-option,html[data-skin="terminal"] .poll-confirm
 .outbox-row{align-self:flex-end;max-width:min(86%,380px);padding:10px 14px;margin:5px 0;border:1px dashed var(--green);border-radius:16px;background:var(--paper);color:var(--ink);overflow-wrap:anywhere}
 .outbox-title{display:block;white-space:pre-wrap;font-size:14px}.outbox-status{display:block;font-size:12px;color:var(--muted);margin-top:4px}.outbox-action{border:0;background:transparent;padding:8px 8px 0 0;color:var(--green);font:inherit;font-size:12px;min-height:36px}
 @media(max-width:420px){#stickers-button{width:32px;min-width:32px;padding:5px}.composer{gap:4px}}
+
+/* Проверка связи не означает обрыв; поле стикеров не вызывает автозум iOS. */
+.network-status.connecting i{background:#98a29c}
+html[data-skin=terminal] .network-status.connecting i{background-color:var(--t-line)!important}
+.sticker-keyboard{font-size:16px}

@@ -37,20 +37,22 @@ export function roomTitle(room) {
 export function setMainName(name) {mainName = name || 'Наш круг';}
 
 // Строка под названием чата: связь, «печатает», а в личном чате — «в сети» / «был(а) в сети».
-export function connection(online) {
-  state.online = online;
+export function connection(status = state.connectionState) {
+  const mode = navigator.onLine === false || status === false || status === 'offline' ? 'offline' : status === true || status === 'online' ? 'online' : 'connecting';
+  state.connectionState = mode;
+  const online = state.online = mode === 'online';
   const room = state.room, active = state.people.filter(person => person.online).length;
   const writers = state.people.filter(person => typing.has(room + '|' + person.id)).map(person => person.name);
-  let idle = online ? 'Облако на связи' : 'Нет соединения';
+  let idle = mode === 'connecting' ? 'Подключаемся…' : online ? 'Облако на связи' : 'Нет соединения';
   if(online && state.user) idle = room === MAIN ? active + ' в сети · общий чат' : (lastSeen(personById(room)) || 'личный чат');
   [$('welcome-network'), $('connection-status')].forEach(node => {
     const busy = online && writers.length && node.id === 'connection-status';
-    node.classList.toggle('disconnected', !online); node.classList.toggle('typing', !!busy);
+    node.classList.toggle('disconnected', mode === 'offline'); node.classList.toggle('connecting', mode === 'connecting'); node.classList.toggle('typing', !!busy);
     node.classList.toggle('away', online && !busy && room !== MAIN && !(personById(room) || {}).online && node.id === 'connection-status');
     node.replaceChildren(element('i'));
     node.appendChild(document.createTextNode(busy ? (room === MAIN ? writers.join(', ') + (writers.length > 1 ? ' печатают…' : ' печатает…') : 'печатает…') : idle));
   });
-  $('offline-banner').hidden = online || !state.user;
+  $('offline-banner').hidden = mode !== 'offline' || !state.user;
   refreshMessageDetails();
 }
 export function setTyping(room, id, on) {
@@ -58,7 +60,7 @@ export function setTyping(room, id, on) {
   clearTimeout(typing.get(key));
   if(on) typing.set(key, setTimeout(() => setTyping(room, id, false), 6000));
   else if(!typing.delete(key)) return;
-  connection(state.online); renderChats();
+  connection(); renderChats();
 }
 export function clearTyping() {typing.forEach(item => clearTimeout(item)); typing.clear();}
 
@@ -286,7 +288,7 @@ export function renderChats() {
 export function renderPeople() {
   const me = state.people.find(person => person.id === state.user.id);
   if(me) {state.user = {...state.user, ...me}; $('my-name').textContent = state.user.name;}
-  renderChats(); renderHeader(); connection(state.online);
+  renderChats(); renderHeader(); connection();
   // Обновляем и уже нарисованные сообщения, не трогая ленту и играющее голосовое.
   document.querySelectorAll('.avatar[data-avatar-id]:not(.avatar-preview)').forEach(node => {
     const person = node.dataset.avatarId === state.user.id ? state.user : personById(node.dataset.avatarId);
@@ -309,7 +311,7 @@ export function openRoom(room) {
   if(!(room in state.older)) state.older[room] = room !== MAIN && state.directFull; // история личного чата могла не уместиться в первую загрузку
   restoreDraft(); renderContext();
   rows.clear(); // у строк другой состав — собрать ленту заново
-  renderHeader(); renderMessages('initial'); connection(state.online); markRead();
+  renderHeader(); renderMessages('initial'); connection(); markRead();
 }
 // Изменение участника пришло из облака: «печатает» в общем чате, «прочитано», имя, «в сети».
 export function memberChanged(row) {

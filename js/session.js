@@ -51,6 +51,7 @@ function clearAddress() {if(location.hash) history.replaceState(null, '', locati
 export function showChat(session, cached=false) {
   state.user = session.user; state.room = MAIN; state.older = {}; state.reads = []; state.directFull = false;
   state.verified=!cached;activateAccount(state.user.id);restoreOutbox();
+  connection(cached ? null : true);
   state.read = {[MAIN]:Number(session.user.last_read) || 0};
   state.invitation = ''; state.resetToken = ''; clearAddress();
   // Оформление «терминал» — только у владельца; у остальных всегда обычное.
@@ -97,7 +98,7 @@ export function showJoin(forget) {
   $('people-list').replaceChildren(); $('jump-button').hidden = true;
   try {if(navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});} catch(_error) {}
   state.user = null; document.dispatchEvent(new Event('mayak-context-changed')); $('chat').hidden = true; $('startup').hidden = true; joinVisible(true); $('push-banner').hidden = true; $('install-banner').hidden = true;
-  renderJoin(); connection(state.online);
+  renderJoin(); connection();
   adjustViewport();
 }
 export async function poll(initial = false) {
@@ -153,7 +154,7 @@ async function restoreSession() {
       if(current!==generation)return;
       if(saved?.session?.user?.id===cachedId){
         showChat(saved.session,true);state.people=saved.people||[];state.read=saved.read||{};state.reads=saved.reads||[];state.older=saved.older||{};state.directFull=!!saved.directFull;
-        mergeMessages(saved.messages||[],'initial');state.rev=Number(saved.rev)||0;renderPeople();connection(false);
+        mergeMessages(saved.messages||[],'initial');state.rev=Number(saved.rev)||0;renderPeople();
       }
     }catch(_error){}
   }
@@ -162,6 +163,7 @@ async function restoreSession() {
     if(current !== generation) return;
     if(state.user?.id===session.user.id){state.user=session.user;state.verified=true;activateAccount(session.user.id);}
     else {if(state.user)showJoin();showChat(session);}
+    connection(true);flushOutbox();
     await poll(!state.rev);
   }
   catch(error) {

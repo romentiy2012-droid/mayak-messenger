@@ -11,9 +11,10 @@ import {adjustViewport, followViewport, revealDialogFocus} from './viewport.js';
 import {stickerCollection} from './stickers.js';
 
 let previousFocus = null, cleanup = null, saving = false;
-function dialog(title) {
+function dialog(title, opener = document.activeElement) {
   if(cleanup) {cleanup(); cleanup = null;}
-  previousFocus = document.activeElement;
+  previousFocus = opener;
+  if(document.activeElement?.isContentEditable || document.activeElement?.matches('input,textarea,select')) document.activeElement.blur();
   const content = $('dialog-content'); content.replaceChildren(element('h2', '', title)); content.firstChild.id = 'dialog-title';
   $('dialog-layer').hidden = false; adjustViewport(); $('dialog-close').focus({preventScroll:true}); return content;
 }
@@ -165,7 +166,7 @@ function aboutDialog() {
   content.appendChild(element('p', 'about-note', 'Действия с сообщением — ответ, реакция, изменение, удаление — открываются долгим нажатием на него. Чтобы ответить быстро, смахните сообщение влево.' + (state.user.owner ? ' Вы — админ: можете удалить любое сообщение общего чата и участника.' : '')));
   content.appendChild(element('p', 'about-note', state.user.owner ? 'Забыли свой пароль владельца — он меняется в Supabase: Authentication → Users.' : 'Забыли пароль — попросите владельца чата прислать ссылку для сброса.'));
   content.appendChild(element('p', 'about-note', 'История хранится в Supabase. Соединение защищено HTTPS; сквозного шифрования нет. О новых сообщениях приходят push-уведомления, если они включены на устройстве.'));
-  content.appendChild(element('p', 'about-note', 'Маяк 2.20.1 · облачная версия.'));
+  content.appendChild(element('p', 'about-note', 'Маяк 2.20.2 · облачная версия.'));
   content.appendChild(button('Выйти на этом устройстве', async () => {
     try {await pushDisable(true).catch(() => {}); await post('logout', {}); closeDialog(); showJoin(true);}
     catch(error) {toast(problem(error));}
@@ -176,11 +177,11 @@ export function initDialogs() {
   $('stickers-button').addEventListener('click',()=>{
     if(!state.user||state.sending||state.editing)return;
     if(state.attachment){toast('Сначала отправь или убери вложение.');return;}
-    const content=dialog('Мои стикеры');cleanup=stickerCollection(content,closeDialog);
+    const content=dialog('Мои стикеры',$('stickers-button'));cleanup=stickerCollection(content,closeDialog);
   });
   $('dialog-layer').addEventListener('focusin', event => {
     revealDialogFocus();
-    if(event.target.matches('input,textarea,select')) followViewport(1500);
+    if(event.target.matches('input,textarea,select') || event.target.isContentEditable) followViewport(1500);
   });
   $('dialog-layer').addEventListener('focusout', () => followViewport(800));
   document.addEventListener('mayak-attachments',attachmentDialog);
@@ -196,7 +197,7 @@ export function initDialogs() {
     if($('dialog-layer').hidden) return;
     if(event.key === 'Escape') closeDialog();
     if(event.key === 'Tab') {
-      const nodes = Array.from($('dialog-layer').querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href]')).filter(node=>!node.hidden&&node.getClientRects().length); const first = nodes[0], last = nodes[nodes.length - 1];
+      const nodes = Array.from($('dialog-layer').querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[contenteditable="true"],a[href]')).filter(node=>!node.hidden&&node.getClientRects().length); const first = nodes[0], last = nodes[nodes.length - 1];
       if(event.shiftKey && document.activeElement === first) {last.focus(); event.preventDefault();}
       else if(!event.shiftKey && document.activeElement === last) {first.focus(); event.preventDefault();}
     }

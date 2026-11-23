@@ -8,10 +8,11 @@ export function nearBottom() {const node = $('messages-scroll'); return node.scr
 export function revealDialogFocus() {
   const layer = $('dialog-layer'), field = document.activeElement;
   if(layer.hidden || !layer.contains(field)) return;
+  if(!field.matches('input,textarea,select') && !field.isContentEditable) return;
   const card = layer.querySelector('.dialog-card'), box = card.getBoundingClientRect(), rect = field.getBoundingClientRect();
   const top = box.top + 16, bottom = box.bottom - 16;
-  if(rect.bottom > bottom) card.scrollTop += rect.bottom - bottom;
-  if(rect.top < top || rect.height > bottom - top) card.scrollTop += field.getBoundingClientRect().top - top;
+  if(rect.top < top || rect.height > bottom - top) card.scrollTop += rect.top - top;
+  else if(rect.bottom > bottom) card.scrollTop += rect.bottom - bottom;
 }
 
 // iOS при открытии клавиатуры не сжимает страницу, а сдвигает видимую область:
@@ -26,6 +27,9 @@ export function adjustViewport() {
   root.style.setProperty('--dialog-top', top);
   if(changed) revealDialogFocus();
   root.classList.toggle('chat-open', chat && window.innerWidth <= 760);
+  // Safari сам сдвигает visualViewport для поля в диалоге. Сброс прокрутки
+  // чата здесь запускает обратный сдвиг и новый scroll — окно начинает прыгать.
+  if(!$('dialog-layer').hidden) return;
   if(!view || !chat || window.innerWidth > 760) {root.style.removeProperty('--app-height'); root.style.removeProperty('--app-top'); return;}
   if(window.scrollX || window.scrollY || view.offsetTop) window.scrollTo(0,0);
   const scroll = $('messages-scroll'), atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;

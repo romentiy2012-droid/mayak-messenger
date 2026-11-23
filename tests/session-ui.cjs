@@ -59,6 +59,25 @@ async function fixture({saved=session(),hold=false,fail=false,hash=''}={}){
 }
 async function noForm(page){await expect(page.locator('#welcome')).toBeHidden();await expect(page.locator('#join-password')).toBeDisabled();assert.equal(await page.evaluate(()=>window.credentialsShown),false);}
 
+test('cached startup distinguishes a pending connection from an actual outage',{timeout:45000},async()=>{
+ const f=await fixture(),{page}=f;
+ try{
+  await expect(page.locator('#chat')).toBeVisible();
+  await expect.poll(()=>page.evaluate(async id=>!!await (await import('/js/offline.js')).loadHistory(id),UID)).toBe(true);
+  f.probe.hold=true;await page.reload();await expect(page.locator('#chat')).toBeVisible();
+  await expect(page.locator('#connection-status')).toContainText('Подключаемся');await expect(page.locator('#offline-banner')).toBeHidden();
+  await page.screenshot({path:path.join(root,'test-results/startup-connecting-fixed.png')});
+  await page.waitForTimeout(8500);
+  await page.evaluate(async()=>{(await import('/js/messages.js')).renderPeople();});
+  await expect(page.locator('#connection-status')).toContainText('Подключаемся');await expect(page.locator('#offline-banner')).toBeHidden();await noForm(page);
+  f.release();await expect(page.locator('#connection-status')).toContainText('в сети');
+  await page.context().setOffline(true);await expect(page.locator('#offline-banner')).toBeVisible();await expect(page.locator('#connection-status')).toContainText('Нет соединения');
+  await page.context().setOffline(false);await expect(page.locator('#offline-banner')).toBeHidden();
+  f.probe.fail=true;await page.reload();await expect(page.locator('#chat')).toBeVisible();await expect(page.locator('#offline-banner')).toBeVisible({timeout:15000});await noForm(page);
+  assert.deepEqual(f.probe.errors,[]);
+ }finally{await f.close();}
+});
+
 test('cold launch and reopened page restore stored auth without ever exposing credentials',{timeout:45000},async()=>{
  const f=await fixture({hold:true});let {page}=f;
  try{
@@ -97,7 +116,7 @@ test('connection retry succeeds on button and on returning to the app',{timeout:
  try{
   await expect(page.locator('#startup-retry')).toBeVisible({timeout:20000});f.probe.fail=false;await page.locator('#startup-retry').tap();await expect(page.locator('#chat')).toBeVisible();await noForm(page);
   await expect.poll(()=>page.evaluate(async()=>!!await (await import('/js/offline.js')).loadHistory('00000000-0000-4000-8000-000000000001'))).toBe(true);
-  f.probe.fail=true;await page.reload();await expect(page.locator('#chat')).toBeVisible();await expect(page.locator('#offline-banner')).toBeVisible();f.probe.fail=false;
+  f.probe.fail=true;await page.reload();await expect(page.locator('#chat')).toBeVisible();await expect(page.locator('#offline-banner')).toBeVisible({timeout:15000});f.probe.fail=false;
   await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect.poll(()=>page.evaluate(async()=>(await import('/js/core.js')).state.verified),{timeout:20000}).toBe(true);await noForm(page);assert.equal(f.probe.password,0);assert.deepEqual(f.probe.errors,[]);
  }finally{await f.close();}
 });
