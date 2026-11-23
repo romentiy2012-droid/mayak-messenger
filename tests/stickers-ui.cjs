@@ -57,6 +57,7 @@ test('personal stickers survive the upgrade; one tap sends, favorites/recent per
 
 test('catalog starts empty, can add a trusted pack later, and ignores external image sources',{timeout:45000},async()=>{
  const f=await fixture(),{page}=f;try{
+  await page.route('**/assets/sticker-packs.json',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({version:1,packs:[]})}));
   await collection(page);await page.getByRole('button',{name:'Каталог наборов',exact:true}).tap();await expect(page.locator('.expression-empty')).toContainText('Наборов пока нет');
   const bytes=Buffer.from(await transparentPNG(page));await page.route('**/assets/sticker-packs.json',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({version:1,packs:[{id:'test',title:'Тестовый набор',items:[{url:'assets/stickers/test.png',title:'Тестовый стикер'}]},{id:'bad',title:'Внешний',items:[{url:'https://untrusted.invalid/image.png'}]}]})}));await page.route('**/assets/stickers/test.png',r=>r.fulfill({contentType:'image/png',body:bytes}));
   await page.locator('#stickers-button').tap();await collection(page);await page.getByRole('button',{name:'Каталог наборов',exact:true}).tap();await expect(page.locator('.expression-pack')).toHaveCount(1);await page.getByRole('button',{name:'Добавить',exact:true}).tap();await expect(page.getByRole('button',{name:'Добавлен',exact:true})).toBeDisabled();

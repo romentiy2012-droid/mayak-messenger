@@ -1,1 +1,61 @@
-{"version":1,"packs":[]}
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "po-pivku",
+      "title": "По пивку",
+      "items": [
+        {
+          "url": "assets/stickers/po-pivku/01-po-pivku.png",
+          "title": "По пивку?",
+          "tags": "пиво приглашение встреча по пивку"
+        },
+        {
+          "url": "assets/stickers/po-pivku/02-za-vstrechu.png",
+          "title": "За встречу!",
+          "tags": "тост встреча привет друзья"
+        },
+        {
+          "url": "assets/stickers/po-pivku/03-rybka-est.png",
+          "title": "Рыбка есть!",
+          "tags": "рыба закуска лещ рыбка"
+        },
+        {
+          "url": "assets/stickers/po-pivku/04-pyatnica.png",
+          "title": "Пятница!",
+          "tags": "пятница выходные ура праздник"
+        },
+        {
+          "url": "assets/stickers/po-pivku/05-uzhe-nesu.png",
+          "title": "Уже несу!",
+          "tags": "иду несу спешу авоська банка"
+        },
+        {
+          "url": "assets/stickers/po-pivku/06-odobryayu.png",
+          "title": "Одобряю!",
+          "tags": "да хорошо согласен одобряю класс"
+        },
+        {
+          "url": "assets/stickers/po-pivku/07-dushevno-sidim.png",
+          "title": "Душевно сидим",
+          "tags": "отдых посиделки друзья душевно"
+        },
+        {
+          "url": "assets/stickers/po-pivku/08-eshche-po-odnoy.png",
+          "title": "Ещё по одной?",
+          "tags": "еще добавка вопрос по одной"
+        },
+        {
+          "url": "assets/stickers/po-pivku/09-zakusyway.png",
+          "title": "Закусывай!",
+          "tags": "закуска угощение рыба закусывай"
+        },
+        {
+          "url": "assets/stickers/po-pivku/10-a-vchera.png",
+          "title": "А вчера было хорошо…",
+          "tags": "утро вчера чай похмелье устал"
+        }
+      ]
+    }
+  ]
+}
