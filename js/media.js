@@ -109,6 +109,14 @@ export async function prepareSticker(file) {
   try {
     const width=image.width || image.naturalWidth, height=image.height || image.naturalHeight;
     if(!width || !height || width * height > 40000000) throw new Error('Не удалось прочитать стикер.');
+    // APNG использует тот же допустимый image/png и сохраняет анимацию без перекодирования.
+    if(['image/png','image/apng'].includes(file.type) && file.size<=4*1024*1024 && width<=512 && height<=512){
+      const bytes=new Uint8Array(await file.arrayBuffer()),view=new DataView(bytes.buffer);let animated=false;
+      if(bytes.length>=8 && bytes[0]===137 && bytes[1]===80 && bytes[2]===78 && bytes[3]===71){
+        for(let offset=8;offset+12<=bytes.length;){const length=view.getUint32(offset);if(offset+12+length>bytes.length)break;if(bytes[offset+4]===97&&bytes[offset+5]===99&&bytes[offset+6]===84&&bytes[offset+7]===76&&length===8&&view.getUint32(offset+8)>1){animated=true;break;}offset+=12+length;}
+      }
+      if(animated)return {kind:'photo',sticker:true,blob:new Blob([bytes],{type:'image/png'}),extension:'png',meta:{w:width,h:height,size:file.size,mime:'image/png'}};
+    }
     const scale=Math.min(1,512/Math.max(width,height)),canvas=document.createElement('canvas');
     canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
     canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);

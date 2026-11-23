@@ -31,7 +31,7 @@ export function adjustViewport() {
   // чата здесь запускает обратный сдвиг и новый scroll — окно начинает прыгать.
   if(!$('dialog-layer').hidden) return;
   if(!view || !chat || window.innerWidth > 760) {root.style.removeProperty('--app-height'); root.style.removeProperty('--app-top'); return;}
-  if(window.scrollX || window.scrollY || view.offsetTop) window.scrollTo(0,0);
+  if($('expression-panel')?.hidden !== false && (window.scrollX || window.scrollY || view.offsetTop)) window.scrollTo(0,0);
   const scroll = $('messages-scroll'), atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
   root.style.setProperty('--app-height', view.height + 'px');
   root.style.setProperty('--app-top', Math.max(0, view.offsetTop) + 'px');

@@ -40,6 +40,13 @@ async function fixture(clock=false){
  const unchanged=async id=>{await page.waitForTimeout(4200);assert.equal(await page.evaluate(()=>window.loadId),id);};
  return {release,browser,context,page,errors,version,update,unchanged,close:async()=>{await browser.close();await new Promise(resolve=>server.close(resolve));}};
 }
+test('automatic update waits while the inline expression panel is open',{timeout:45000},async()=>{
+ const f=await fixture(),{page}=f;try{
+  const initial=await page.evaluate(()=>window.loadId);await page.locator('#stickers-button').tap();await expect(page.locator('#expression-panel')).toBeVisible();
+  await f.update('2.14.9');await expect(page.locator('#update-banner')).toBeVisible();await f.unchanged(initial);await page.locator('#stickers-button').tap();await expect.poll(f.version,{timeout:20000}).toBe('2.14.9');assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
+
 test('automatic update: complete worker installation, safe deferral, drafts/chat, recording and offline recovery',{timeout:180000},async()=>{
  const f=await fixture(),{page,context,release,version,update,unchanged}=f;
  try{

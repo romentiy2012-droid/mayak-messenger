@@ -11,10 +11,11 @@ import {initComposer} from './js/composer.js';
 import {initActions} from './js/actions.js';
 import {initDialogs} from './js/dialogs.js';
 import {initInstall} from './js/install.js';
+import {initExpressions} from './js/expressions.js';
 import {showChat, showJoin, renderJoin, poll, boot} from './js/session.js';
 import {initUpdates, restoreUpdateContext} from './js/updates.js';
 
-initComposer(); initActions(); initDialogs(); initInstall();
+initComposer(); initActions(); initDialogs(); initInstall(); initExpressions();
 $('startup-retry').addEventListener('click', boot);
 
 $('join-form').addEventListener('submit', async event => {

@@ -8,7 +8,7 @@ import {enqueue} from './outbox.js';
 
 let typingSent = 0, draftTimer = null, recording = null, recordTimer = null;
 let preparing = 0, choosingPhoto = false;
-export const composerBusy = () => !!(recording || preparing || choosingPhoto || state.sending || state.attachment || state.editing);
+export const composerBusy = () => !!(recording || preparing || choosingPhoto || state.sending || state.attachment || state.editing || $('expression-panel')?.hidden===false);
 const MAX_RECORDING = 300; // секунд
 function newNonce() {const random = new Uint32Array(4); crypto.getRandomValues(random); return Array.from(random).map(value => value.toString(16)).join('-');}
 
@@ -62,6 +62,22 @@ export async function attachSticker(file) {
     if(state.user?.id!==user || state.room!==room || state.sending || state.editing || state.attachment) return false;
     item.room=room;item.preview=URL.createObjectURL(item.blob);state.attachment=item;renderAttachment();resizeComposer();return true;
   } catch(error) {toast(error.message);return false;} finally {preparing--;}
+}
+// Выбор в панели отправляет стикер сразу; обычная вставка с клавиатуры остаётся с предпросмотром.
+export async function sendSticker(file, expectedRoom, expectedUser) {
+  if(state.user?.id!==expectedUser || state.room!==expectedRoom) return false;
+  if(!await attachSticker(file)) return false;
+  const item=state.attachment;
+  await submit({preventDefault(){}});
+  return state.user?.id===expectedUser && state.attachment!==item;
+}
+export function insertEmoji(emoji, start, end) {
+  if(!state.user || state.sending) return null;
+  const input=$('message-input'),from=Math.min(start,input.value.length),to=Math.min(end,input.value.length);
+  if(input.value.length-(to-from)+emoji.length>input.maxLength){toast('Сообщение уже слишком длинное.');return null;}
+  input.setRangeText(emoji,from,to,'end');
+  input.dispatchEvent(new Event('input',{bubbles:true}));saveDraft();
+  return input.selectionEnd;
 }
 function recordTick() {
   if(!recording) return;
