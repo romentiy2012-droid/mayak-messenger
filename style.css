@@ -517,6 +517,9 @@ html[data-skin=terminal] .network-status.connecting i{background-color:var(--t-l
 .expression-panel[hidden]{display:none!important}
 .expression-categories{display:flex;gap:3px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;padding:5px 5px 2px;min-height:44px;overscroll-behavior:contain}
 .expression-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 39px;min-width:39px;height:38px;border:0;background:transparent;border-radius:11px;font-size:23px;color:inherit;line-height:1;cursor:pointer}
+.expression-pack-icon{padding:3px;font-size:15px}
+.expression-pack-icon img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.expression-icon svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .expression-categories .selected,.expression-tab[aria-selected=true]{background:var(--mint);color:var(--green)}
 .expression-icon:focus-visible,.emoji-pick:focus-visible,.expression-sticker-pick:focus-visible,.expression-tab:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
 .expression-search-row{display:flex;gap:5px;padding:3px 8px 6px;flex-shrink:0}

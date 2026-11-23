@@ -26,8 +26,17 @@ export function closeExpressions(focus=false){
 function switchTab(next){tab=next;search.value='';search.placeholder=tab==='emoji'?'Найти эмодзи':'Найти стикер';render();}
 function categories(){
   const left=nav.scrollLeft;nav.replaceChildren();
-  const options=tab==='emoji'?[['recent','🕘','Недавние эмодзи'],...(data||[]).map(g=>[g.id,g.icon,g.title])]:[['recent','🕘','Недавние стикеры'],['favorites','☆','Избранные стикеры'],['mine','▧','Мои стикеры'],...installed.map(p=>[p.id,'▦',p.title])];
-  for(const [id,label,title] of options){const node=icon(title,label,()=>{if(tab==='emoji')group=id;else section=id;search.value='';render();});selected(node,(tab==='emoji'?group:section)===id);nav.appendChild(node);}
+  const options=tab==='emoji'?[['recent','🕘','Недавние эмодзи'],...(data||[]).map(g=>[g.id,g.icon,g.title])]:[['recent','🕘','Недавние стикеры'],['favorites','☆','Избранные стикеры'],['mine','','Мои стикеры'],...installed.map(p=>[p.id,'',p.title,p.items[0]?.url])];
+  for(const [id,label,title,cover] of options){
+    const node=icon(title,label,()=>{if(tab==='emoji')group=id;else section=id;search.value='';render();});
+    if(cover){
+      node.classList.add('expression-pack-icon');const image=element('img');image.alt='';image.decoding='async';image.loading='lazy';image.draggable=false;
+      image.addEventListener('error',()=>{node.textContent=title.trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase();},{once:true});image.src=cover;node.appendChild(image);
+    }else if(tab==='stickers'&&id==='mine'){
+      node.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h8l7-7V6a3 3 0 0 0-3-3Z"/><path d="M14 21v-4a3 3 0 0 1 3-3h4M8 8h.01M14 8h.01M8 12c1.5 1.5 4.5 1.5 6 0"/></svg>';
+    }
+    selected(node,(tab==='emoji'?group:section)===id);nav.appendChild(node);
+  }
   nav.scrollLeft=left;
 }
 function bottom(){

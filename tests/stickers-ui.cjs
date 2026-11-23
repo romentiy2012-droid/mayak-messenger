@@ -65,6 +65,20 @@ test('catalog starts empty, can add a trusted pack later, and ignores external i
  }finally{await f.close();}
 });
 
+test('installed pack tabs show sticker covers, persist and survive a failed cover image',{timeout:45000},async()=>{
+ const f=await fixture(),{page}=f;try{
+  const packs=JSON.parse(fs.readFileSync(path.join(root,'assets/sticker-packs.json'),'utf8')).packs.slice(0,2);assert.equal(packs.length,2);
+  await collection(page);await page.getByRole('button',{name:'Каталог наборов',exact:true}).tap();
+  for(const pack of packs)await page.locator('.expression-pack').filter({hasText:pack.title}).getByRole('button',{name:'Добавить',exact:true}).tap();
+  for(const pack of packs){const tab=page.locator('.expression-categories').getByRole('button',{name:pack.title,exact:true});await expect(tab.locator('img')).toHaveCount(1);await expect(tab.locator('img')).toHaveAttribute('src',new URL(pack.items[0].url,page.url()).href);await tab.locator('img').evaluate(img=>img.decode());await tab.tap();await expect(tab).toHaveAttribute('aria-pressed','true');await expect(page.locator('.expression-heading')).toHaveText(pack.title);}
+  await expect(page.getByRole('button',{name:'Мои стикеры',exact:true}).locator('svg')).toHaveCount(1);
+  await page.locator('.expression-categories img').evaluateAll(imgs=>Promise.all(imgs.map(img=>img.decode())));
+  for(const theme of ['light','dark']){await page.evaluate(theme=>window.MayakTheme.set(theme),theme);await page.screenshot({path:path.join(root,'test-results/pack-covers-'+theme+'.png')});}
+  await page.reload();await collection(page);for(const pack of packs)await expect(page.locator('.expression-categories').getByRole('button',{name:pack.title,exact:true}).locator('img')).toHaveCount(1);
+  const first=page.locator('.expression-categories').getByRole('button',{name:packs[0].title,exact:true});await first.locator('img').evaluate(img=>{img.src='/assets/stickers/missing-cover.png';});await expect(first.locator('img')).toHaveCount(0);await expect(first).not.toHaveText('');await first.tap();await expect(page.locator('.expression-heading')).toHaveText(packs[0].title);assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
+
 test('management, keyboard image capture and repeated panel opening fit small screens and Safari viewport',{timeout:45000},async()=>{
  const f=await fixture(),{page}=f;try{
   await collection(page);await manage(page);const bytes=Buffer.from(await transparentPNG(page));await page.getByLabel('Добавить стикер из файла').setInputFiles({name:'test.png',mimeType:'image/png',buffer:bytes});await expect(page.locator('.expression-sticker')).toHaveCount(1);
