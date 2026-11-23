@@ -56,6 +56,62 @@
           "tags": "утро вчера чай похмелье устал"
         }
       ]
+    },
+    {
+      "id": "bez-suety",
+      "title": "Без суеты",
+      "items": [
+        {
+          "url": "assets/stickers/bez-suety/01-nu-nu-rasskazyvay.png",
+          "title": "Ну-ну, рассказывай",
+          "tags": "рассказывай слушаю интересно скепсис"
+        },
+        {
+          "url": "assets/stickers/bez-suety/02-zvuchit-somnitelno.png",
+          "title": "Звучит сомнительно",
+          "tags": "сомнение скепсис не уверен"
+        },
+        {
+          "url": "assets/stickers/bez-suety/03-ya-zhe-govoril.png",
+          "title": "Я же говорил",
+          "tags": "говорил предупреждал прав"
+        },
+        {
+          "url": "assets/stickers/bez-suety/04-mozhno-a-zachem.png",
+          "title": "Можно, а зачем?",
+          "tags": "можно зачем вопрос смысл"
+        },
+        {
+          "url": "assets/stickers/bez-suety/10-delo-govorish.png",
+          "title": "Дело говоришь",
+          "tags": "правильно согласен дельно дело говоришь"
+        },
+        {
+          "url": "assets/stickers/bez-suety/05-shchas-vse-reshim.png",
+          "title": "Щас всё решим",
+          "tags": "решим сейчас дело работа помощь"
+        },
+        {
+          "url": "assets/stickers/bez-suety/06-tak-i-bylo-zadumano.png",
+          "title": "Так и было задумано",
+          "tags": "план задумано так и надо"
+        },
+        {
+          "url": "assets/stickers/bez-suety/07-glavnoe-ne-suetitsya.png",
+          "title": "Главное — не суетиться",
+          "tags": "без суеты спокойно чай отдых"
+        },
+        {
+          "url": "assets/stickers/bez-suety/08-chto-to-poshlo-ne-tak.png",
+          "title": "Что-то пошло не так",
+          "tags": "ошибка проблема не так"
+        },
+        {
+          "url": "assets/stickers/bez-suety/09-ladno-ugovoril.png",
+          "title": "Ладно, уговорил",
+          "tags": "ладно согласен уговорил да"
+        }
+      ]
     }
   ]
 }
