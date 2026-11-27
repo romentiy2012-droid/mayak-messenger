@@ -3,6 +3,7 @@ import {$, state, element, prefs, post} from './core.js';
 import {mergeMessages} from './messages.js';
 import {analyseVoice} from './voice-timing.js';
 import {prepareVoicePlayback} from './voice-mp4.js';
+import {showPhotoViewer,hidePhotoViewer} from './photo-viewer.js';
 
 // ===== Файлы из хранилища =====
 // Файл скачивается один раз и остаётся на устройстве (Cache Storage), чтобы не тянуть его при каждом открытии.
@@ -139,12 +140,14 @@ export function photoNode(message) {
   frame.addEventListener('click',event=>{if(!image.src||frame.classList.contains('failed')){event.stopPropagation();retry();}},true);
   return frame;
 }
-export function openViewer(id) {
+let viewerRequest=0;
+export function openViewer(id,opener) {
   const message = state.messages.find(item => item.id === id);
   if(!message || !message.file) return;
-  mediaURL(message.file).then(url => {if(!state.messages.some(current => current.id === id && current.file === message.file && !current.deleted)) return; $('viewer-image').src = url; $('viewer-layer').hidden = false;}).catch(() => {});
+  const request=++viewerRequest,user=state.user?.id;
+  mediaURL(message.file).then(url => {if(request!==viewerRequest||state.user?.id!==user||!state.messages.some(current => current.id === id && current.file === message.file && !current.deleted)) return;showPhotoViewer(url,closeViewer,opener);}).catch(() => {});
 }
-export function closeViewer() {$('viewer-layer').hidden = true; $('viewer-image').removeAttribute('src');}
+export function closeViewer() {++viewerRequest;hidePhotoViewer();}
 
 // ===== Голосовые =====
 export function clock(seconds) {

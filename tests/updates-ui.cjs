@@ -72,6 +72,13 @@ test('automatic update waits while the inline expression panel is open',{timeout
   await f.update('2.14.9');await expect(page.locator('#update-banner')).toBeVisible();await f.unchanged(initial);await page.locator('#stickers-button').tap();await expect.poll(f.version,{timeout:20000}).toBe('2.14.9');assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
+test('automatic update waits for the photo viewer and resumes after closing it',{timeout:45000},async()=>{
+ const f=await fixture(),{page}=f;try{
+  await page.evaluate(async()=>{const {state}=await import('/js/core.js'),media=await import('/js/media.js'),blob=await (await fetch('/icon-512.png')).blob();media.rememberMedia('synthetic/update-photo.png',blob);state.messages.push({id:999,file:'synthetic/update-photo.png',kind:'photo'});media.openViewer(999);});
+  await expect(page.locator('#viewer-layer')).toBeVisible();const initial=await page.evaluate(()=>window.loadId);await f.update('2.14.9');await expect(page.locator('#update-banner')).toBeVisible();await f.unchanged(initial);await expect(page.locator('#viewer-layer')).toBeVisible();
+  await page.locator('#viewer-close').tap();await expect.poll(f.version,{timeout:20000}).toBe('2.14.9');await expect(page.locator('#update-banner')).toBeHidden();assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
 
 test('automatic update: complete worker installation, safe deferral, drafts/chat, recording and offline recovery',{timeout:180000},async()=>{
  const f=await fixture(),{page,context,release,version,update,unchanged}=f;

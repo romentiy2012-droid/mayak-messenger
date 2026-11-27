@@ -29,7 +29,7 @@ export function adjustViewport() {
   root.classList.toggle('chat-open', chat && window.innerWidth <= 760);
   // Safari сам сдвигает visualViewport для поля в диалоге. Сброс прокрутки
   // чата здесь запускает обратный сдвиг и новый scroll — окно начинает прыгать.
-  if(!$('dialog-layer').hidden) return;
+  if(!$('dialog-layer').hidden || $('viewer-layer')?.hidden === false) return;
   if(!view || !chat || window.innerWidth > 760) {root.style.removeProperty('--app-height'); root.style.removeProperty('--app-top'); return;}
   if($('expression-panel')?.hidden !== false && (window.scrollX || window.scrollY || view.offsetTop)) window.scrollTo(0,0);
   const scroll = $('messages-scroll'), atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;

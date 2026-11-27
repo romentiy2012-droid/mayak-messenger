@@ -136,7 +136,7 @@ export function initActions() {
     const more = event.target.closest('.message-more'); if(more) {openSheet(rowId(more)); return;}
     const speed = event.target.closest('.voice-speed'); if(speed) {nextSpeed(); return;}
     const play = event.target.closest('.voice-play'); if(play) {toggleVoice(rowId(play)).catch(error => toast(error.message)); return;}
-    const photo = event.target.closest('[data-photo]'); if(photo) openViewer(Number(photo.dataset.photo));
+    const photo = event.target.closest('[data-photo]'); if(photo) openViewer(Number(photo.dataset.photo),photo);
   });
   list.addEventListener('contextmenu', event => {
     const bubble = event.target.closest('.message-bubble');
@@ -183,8 +183,7 @@ export function initActions() {
   };
   list.addEventListener('touchend', endPress);
   list.addEventListener('touchcancel', endPress);
-  $('viewer-layer').addEventListener('click', closeViewer);
-  list.addEventListener('keydown', event => {const photo = event.target.closest('[data-photo]'); if(photo && (event.key === 'Enter' || event.key === ' ')) {event.preventDefault(); openViewer(Number(photo.dataset.photo));}});
+  list.addEventListener('keydown', event => {const photo = event.target.closest('[data-photo]'); if(photo && (event.key === 'Enter' || event.key === ' ')) {event.preventDefault(); openViewer(Number(photo.dataset.photo),photo);}});
   document.addEventListener('keydown', event => {if(event.key === 'Escape' && !$('viewer-layer').hidden) {event.stopImmediatePropagation(); closeViewer();}}, true);
   document.addEventListener('keydown', event => {if(event.key === 'Escape' && !$('sheet-layer').hidden) {event.stopImmediatePropagation(); closeSheet();}}, true);
 }
