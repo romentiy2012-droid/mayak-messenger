@@ -243,6 +243,7 @@ export function updateUnread() {
 }
 // Прочитанным считается всё, что на экране: чат открыт и лента прокручена вниз.
 export function markRead() {
+  if(document.body.dataset.meteoOpen === 'true') return;
   const room = state.room, shown = state.user ? inRoom(room) : [];
   if(state.user && state.verified && state.online && !document.hidden && shown.length && nearBottom()) {
     const last = shown[shown.length - 1].id;

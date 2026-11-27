@@ -15,7 +15,7 @@ function setup(options={}){
   return new Response(options.rawBody??JSON.stringify(options.response??{storage:{used_bytes:123},traffic:{status:'unavailable',used_bytes:null}}),{status:options.status||200,headers:{'Content-Type':'application/json'}});
  };
  vm.runInNewContext(code,{window,fetch,location:{pathname:'/mayak-messenger/',origin:'https://romentiy2012-droid.github.io'},localStorage:{getItem(){return null;},setItem(){},removeItem(){}},
-  URL,URLSearchParams,TextEncoder,TextDecoder,AbortController,setTimeout,clearTimeout,atob:value=>Buffer.from(value,'base64').toString('binary')});
+  Response,URL,URLSearchParams,TextEncoder,TextDecoder,AbortController,setTimeout,clearTimeout,atob:value=>Buffer.from(value,'base64').toString('binary')});
  return {api:window.MayakCloud.api,requests,clients,config};
 }
 

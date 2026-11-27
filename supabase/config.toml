@@ -13,3 +13,7 @@ verify_jwt = false
 # Проверяет JWT через Auth API и актуальную роль владельца; RPC доступны только service_role.
 [functions.storage-admin]
 verify_jwt = false
+
+# ESP32 использует отдельный ключ станции; проверка ключа и записи внутри функции/RPC.
+[functions.weather-ingest]
+verify_jwt = false

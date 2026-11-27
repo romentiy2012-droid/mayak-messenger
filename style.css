@@ -175,9 +175,9 @@ html[data-skin=terminal]{
 }
 html[data-skin=terminal],html[data-skin=terminal] body{background:var(--t-bg)!important;color:var(--t-fg)}
 html[data-skin=terminal] body{text-shadow:0 0 7px rgba(43,255,136,.38)}
-html[data-skin=terminal] body *{color:inherit!important;background-color:transparent!important;border-color:var(--t-line)!important;border-radius:0!important;box-shadow:none!important;font-family:inherit!important;letter-spacing:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html[data-skin=terminal] body *:not(.meteo-screen):not(.meteo-screen *){color:inherit!important;background-color:transparent!important;border-color:var(--t-line)!important;border-radius:0!important;box-shadow:none!important;font-family:inherit!important;letter-spacing:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 /* Полосы развёртки и затемнение по краям — поверх всего, нажатиям не мешают. */
-html[data-skin=terminal] body::after{content:"";position:fixed;top:0;left:0;right:0;bottom:0;z-index:999;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.2) 2px,rgba(0,0,0,.2) 3px),radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.42) 100%)}
+html[data-skin=terminal] body:not([data-meteo-open])::after{content:"";position:fixed;top:0;left:0;right:0;bottom:0;z-index:999;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.2) 2px,rgba(0,0,0,.2) 3px),radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.42) 100%)}
 html[data-skin=terminal] ::selection{background:var(--t-fg);color:var(--t-bg);text-shadow:none}
 html[data-skin=terminal] img{filter:grayscale(1) sepia(1) hue-rotate(75deg) saturate(5) brightness(.95)}
 
@@ -221,7 +221,7 @@ html[data-skin=terminal] .primary-button,html[data-skin=terminal] .send-button,h
 html[data-skin=terminal] .primary-button *,html[data-skin=terminal] .send-button *{color:var(--t-bg)!important}
 html[data-skin=terminal] .send-button:disabled{background-color:transparent!important;color:var(--t-line)!important;border:1px solid var(--t-line)!important;opacity:1}
 html[data-skin=terminal] .send-button:disabled *{color:var(--t-line)!important}
-html[data-skin=terminal] button:active:not(:disabled),html[data-skin=terminal] .sheet-action:active{background-color:var(--t-fill)!important}
+html[data-skin=terminal] button:active:not(:disabled):not(.meteo-screen *),html[data-skin=terminal] .sheet-action:active{background-color:var(--t-fill)!important}
 html[data-skin=terminal] .primary-button:active:not(:disabled),html[data-skin=terminal] .send-button:active:not(:disabled){background-color:var(--t-hot)!important}
 html[data-skin=terminal] button:focus-visible,html[data-skin=terminal] a:focus-visible,html[data-skin=terminal] input:focus-visible{outline-color:var(--t-fg)}
 html[data-skin=terminal] .sheet-action{border-top:1px solid var(--t-line)!important}

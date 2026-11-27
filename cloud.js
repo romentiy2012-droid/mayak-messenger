@@ -121,6 +121,7 @@
       return session();
     }
     if(route==='session')return session();
+    if(route==='weather')return rpc('weather_get',{p_minutes:Number(params.get('minutes')||720)});
     // Любой ответ сервера означает, что облако на связи (таблицы невошедшему недоступны, поэтому их не трогаем).
     if(route==='health'){await plain('/auth/v1/health',{headers:{apikey:config.supabasePublishableKey}});return {ok:true};}
     if(route==='reset'){
