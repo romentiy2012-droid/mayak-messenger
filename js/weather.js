@@ -1,7 +1,7 @@
 import {$,api,state} from './core.js';
 import {stationNight,stationTime,series,chartScale,chartPath,weatherName,WEATHER_WINDOWS,WEATHER_LABELS} from './weather-model.js';
 
-let root=null,selected=720,snapshot=null,owner=null,timer=null,clockTimer=null,epoch=0,active=false,networkError='',skew=0,previousScroll=0,previousFocus=null;
+let root=null,selected=60,snapshot=null,owner=null,timer=null,clockTimer=null,renderTimer=null,epoch=0,active=false,networkError='',skew=0,previousScroll=0,previousFocus=null;
 const NS='http://www.w3.org/2000/svg';
 const node=(tag,cls,text)=>{let e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 const svg=(tag,attrs={})=>{const e=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
@@ -23,7 +23,7 @@ function icon(night,code){
 function make(){
  root=node('section','meteo-screen');root.id='meteo-screen';root.hidden=true;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-labelledby','meteo-title');
  root.innerHTML=`<div class="meteo-wrap"><header class="meteo-topbar"><button type="button" id="meteo-back" class="meteo-back">Назад в чат</button><span class="meteo-brand">МАЯК <b>/</b> МЕТЕО</span><button type="button" id="meteo-refresh" class="meteo-refresh" aria-label="Обновить показания">Обновить</button></header>
- <main class="meteo-main"><header class="meteo-heading"><div><p class="meteo-eyebrow">ВАША МЕТЕОСТАНЦИЯ</p><h1 id="meteo-title">Астрахань</h1><p class="meteo-location">5-я Литейная</p><p id="meteo-date" class="meteo-date"></p></div><div class="meteo-clock-wrap"><span id="meteo-dayphase"></span><time id="meteo-clock">--:--</time><span>Время Астрахани</span></div></header>
+ <main class="meteo-main"><header class="meteo-heading"><div><p class="meteo-eyebrow">ВАША МЕТЕОСТАНЦИЯ</p><h1 id="meteo-title">Астрахань</h1><p class="meteo-location">5-я Литейная</p><p id="meteo-date" class="meteo-date"></p></div><div class="meteo-clock-wrap"><span id="meteo-dayphase"></span><time id="meteo-clock"><span id="meteo-hours">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-minutes">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-seconds">--</span></time><span>Время Астрахани</span></div></header>
  <p id="meteo-alert" class="meteo-alert" role="status" hidden></p>
  <section class="meteo-card meteo-sensor" aria-label="Показания уличного датчика"><div class="meteo-card-top"><h2>Улица / датчик</h2><span id="meteo-status" class="meteo-status">Подключаемся…</span></div>
  <div class="meteo-measures"><div class="meteo-measure"><div class="meteo-number meteo-temperature"><span id="meteo-temp">—</span><small>°C</small></div><p>Температура</p></div><div class="meteo-measure"><div class="meteo-number meteo-humidity"><span id="meteo-rh">—</span><small>%</small></div><p>Влажность</p></div></div>
@@ -59,7 +59,12 @@ function drawChart(points){
 }
 function tick(){
  if(!active)return;const date=stationTime(now()),night=stationNight(now(),snapshot?.latest?.weather);
- root.dataset.theme=night?'dark':'light';$('meteo-clock').textContent=date.clock;$('meteo-date').textContent=date.date;$('meteo-dayphase').textContent=night?'Ночь':'День';
+ root.dataset.theme=night?'dark':'light';$('meteo-hours').textContent=date.hours;$('meteo-minutes').textContent=date.minutes;$('meteo-seconds').textContent=date.seconds;
+ $('meteo-clock').setAttribute('aria-label',date.clockSeconds);$('meteo-clock').dateTime=new Date(now()).toISOString();$('meteo-date').textContent=date.date;$('meteo-dayphase').textContent=night?'Ночь':'День';
+}
+function scheduleClock(){
+ clearTimeout(clockTimer);if(!active)return;if(!document.hidden)tick();
+ clockTimer=setTimeout(scheduleClock,1000-now()%1000+5);
 }
 function render(){
  if(!active)return;tick();const d=snapshot?.latest,w=d?.weather;
@@ -88,20 +93,21 @@ async function load(){
   if(!data?.station||!Array.isArray(data.history)||!Number.isFinite(Date.parse(data.server_time)))throw Error('Неверный ответ сервера');
   snapshot=data;skew=Date.parse(data.server_time)-Date.now();networkError='';
  }catch(error){if(current!==epoch||!active)return;networkError=error.status===401||error.status===403?'Нет доступа к метеостанции. Войдите в Маяк.':'Не удалось обновить данные. Повторим после восстановления связи.';}
- finally {if(current===epoch&&active){$('meteo-refresh').disabled=false;render();}}
+ finally {if(current===epoch&&active){$('meteo-refresh').disabled=false;render();scheduleClock();}}
 }
 export function openWeather(push=true){
  if(!state.user||active)return;if(!root)make();
+ selected=60;for(const button of $('meteo-windows').children)button.setAttribute('aria-pressed',String(Number(button.dataset.minutes)===selected));
  if(owner!==state.user.id){snapshot=null;skew=0;owner=state.user.id;}
  previousFocus=document.activeElement;previousScroll=$('messages-scroll').scrollTop;
  document.dispatchEvent(new Event('mayak-expression-close'));
  if(document.activeElement?.matches('textarea,input'))document.activeElement.blur();
  active=true;root.hidden=false;$('chat').inert=true;document.body.dataset.meteoOpen='true';
  if(push)history.pushState({...history.state,mayakWeather:true},'',location.pathname+location.search+'#weather');
- networkError='';render();$('meteo-back').focus({preventScroll:true});load();timer=setInterval(load,30000);clockTimer=setInterval(()=>{if(!document.hidden)render();},10000);
+ networkError='';render();$('meteo-back').focus({preventScroll:true});load();timer=setInterval(load,30000);scheduleClock();renderTimer=setInterval(()=>{if(!document.hidden)render();},10000);
 }
 export function closeWeather(back=true){
- if(!active)return;active=false;++epoch;clearInterval(timer);clearInterval(clockTimer);root.hidden=true;$('chat').inert=false;delete document.body.dataset.meteoOpen;
+ if(!active)return;active=false;++epoch;clearInterval(timer);clearTimeout(clockTimer);clearInterval(renderTimer);root.hidden=true;$('chat').inert=false;delete document.body.dataset.meteoOpen;
  $('messages-scroll').scrollTop=previousScroll;if(state.user&&previousFocus?.isConnected)previousFocus.focus({preventScroll:true});
  if(back&&history.state?.mayakWeather)history.back();
 }

@@ -9,7 +9,8 @@ export function stationNight(now,weather){
 }
 export function stationTime(now){
  const d=new Date(now+14400000),pad=v=>String(v).padStart(2,'0');
- return {clock:pad(d.getUTCHours())+':'+pad(d.getUTCMinutes()),date:['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getUTCDay()]+', '+pad(d.getUTCDate())+'.'+pad(d.getUTCMonth()+1)+'.'+d.getUTCFullYear()};
+ const hours=pad(d.getUTCHours()),minutes=pad(d.getUTCMinutes()),seconds=pad(d.getUTCSeconds());
+ return {hours,minutes,seconds,clock:hours+':'+minutes,clockSeconds:hours+':'+minutes+':'+seconds,date:['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getUTCDay()]+', '+pad(d.getUTCDate())+'.'+pad(d.getUTCMonth()+1)+'.'+d.getUTCFullYear()};
 }
 export function series(data,now,minutes){
  const cutoff=now-minutes*60000;

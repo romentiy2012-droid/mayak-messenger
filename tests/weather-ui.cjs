@@ -25,13 +25,15 @@ test('weather UI: header thermometer, daytime/night, all windows, draft/read iso
  const f=await fixture();try{const {page}=f;await page.locator('#message-input').fill('Сохранить мой черновик');await page.waitForTimeout(700);
  const before=await page.locator('#messages-scroll').evaluate(e=>e.scrollTop),read=await page.evaluate(()=>weatherTest.read);
  assert.equal(await page.locator('#weather-button').evaluate(e=>e.nextElementSibling.id),'invite-button');
- await page.getByRole('button',{name:'Метеостанция',exact:true}).tap();await expect(page.locator('#meteo-status')).toHaveText('Станция на связи');await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','light');await expect(page.locator('#meteo-clock')).toHaveText('12:00');assert.equal(await page.locator('.meteo-card').first().evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');await expect(page.locator('#meteo-temp')).toHaveText('+28,1');
+ await page.getByRole('button',{name:'Метеостанция',exact:true}).tap();await expect(page.locator('#meteo-status')).toHaveText('Станция на связи');await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','light');await expect(page.locator('#meteo-clock')).toHaveText(/^12:00:\d{2}$/);assert.equal(await page.locator('.meteo-card').first().evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');await expect(page.locator('#meteo-temp')).toHaveText('+28,1');
+ await expect(page.locator('#meteo-windows button[aria-pressed=true]')).toHaveText('1 ч');assert.ok(await page.evaluate(()=>weatherTest.calls.includes('weather?minutes=60')));
+ await expect(page.locator('.meteo-eyebrow')).toHaveText('ВАША МЕТЕОСТАНЦИЯ');assert.match(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e,'::before').backgroundImage),/chat-nautical\.png/);
  assert.equal(await page.locator('#chat').evaluate(e=>e.inert),true);await page.evaluate(async()=>{(await import('/js/messages.js')).markRead();});await page.waitForTimeout(500);assert.equal(await page.evaluate(()=>weatherTest.read),read);
  for(const [i,s]of ['30 мин','1 ч','3 ч','6 ч','12 ч','24 ч'].entries()){await page.locator('#meteo-windows').getByRole('button',{name:s,exact:true}).tap();await expect(page.locator('#meteo-windows button').nth(i)).toHaveAttribute('aria-pressed','true');await expect(page.locator('#meteo-refresh')).toBeEnabled();}
  await page.screenshot({path:path.join(root,'test-results/weather-phone-day.png')});
- await page.evaluate(()=>weatherTest.time=Date.parse('2026-11-27T18:00:00Z'));await page.locator('#meteo-refresh').tap();await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','dark');await expect(page.locator('#meteo-clock')).toHaveText('22:00');await page.waitForTimeout(400);await page.screenshot({path:path.join(root,'test-results/weather-phone-night.png')});
+ await page.evaluate(()=>weatherTest.time=Date.parse('2026-11-27T18:00:00Z'));await page.locator('#meteo-refresh').tap();await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','dark');await expect(page.locator('#meteo-clock')).toHaveText(/^22:00:\d{2}$/);assert.match(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e,'::before').filter),/invert\(1\)/);await page.waitForTimeout(400);await page.screenshot({path:path.join(root,'test-results/weather-phone-night.png')});
  await page.locator('#meteo-back').tap();await expect(page.locator('#meteo-screen')).toBeHidden();await expect(page.locator('#message-input')).toHaveValue('Сохранить мой черновик');assert.equal(await page.locator('#messages-scroll').evaluate(e=>e.scrollTop),before);
- await page.locator('#weather-button').tap();await page.goBack();await expect(page.locator('#meteo-screen')).toBeHidden();
+ await page.locator('#weather-button').tap();await expect(page.locator('#meteo-windows button[aria-pressed=true]')).toHaveText('1 ч');await page.goBack();await expect(page.locator('#meteo-screen')).toBeHidden();
  assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
@@ -42,6 +44,7 @@ test('weather UI: small and desktop screens, honest empty/offline/sensor failure
   assert.ok(await page.locator('.chat-header').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
   assert.ok(await page.locator('#meteo-screen').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
   assert.ok(await page.locator('#meteo-temp').evaluate(e=>e.getBoundingClientRect().right<document.querySelector('#meteo-rh').getBoundingClientRect().left));
+  assert.ok(await page.locator('#meteo-clock').evaluate(e=>e.getBoundingClientRect().left>=document.querySelector('.meteo-heading>div').getBoundingClientRect().right));
   await page.screenshot({path:path.join(root,'test-results/weather-'+size.width+'.png')});
  }
  await page.evaluate(()=>{weatherTest.stale=true;weatherTest.long=false;});await page.locator('#meteo-refresh').click();await expect(page.locator('#meteo-status')).toHaveText('Станция не на связи');await expect(page.locator('#meteo-alert')).toContainText('последние полученные');
@@ -49,5 +52,17 @@ test('weather UI: small and desktop screens, honest empty/offline/sensor failure
  await page.evaluate(()=>weatherTest.empty=true);await page.locator('#meteo-refresh').click();await expect(page.locator('.meteo-chart-empty')).toContainText('после подключения');await expect(page.locator('#meteo-status')).toHaveText('Станция ещё не подключена');
  await page.evaluate(()=>weatherTest.offline=true);await page.locator('#meteo-refresh').click();await expect(page.locator('#meteo-alert')).toContainText('Не удалось обновить');
  await page.evaluate(async()=>{(await import('/js/session.js')).showJoin(true);});await expect(page.locator('#meteo-screen')).toBeHidden();await expect(page.locator('#chat')).toBeHidden();assert.equal(await page.locator('#chat').evaluate(e=>e.inert),false);assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
+test('weather clock: seconds run locally, blinking stops for stale station and reduced motion',{timeout:30000},async()=>{
+ const f=await fixture();try{const {page}=f;
+  await page.clock.install({time:new Date('2026-11-27T08:00:00Z')});await page.clock.pauseAt(new Date('2026-11-27T08:01:00Z'));await page.locator('#weather-button').tap();await expect(page.locator('#meteo-status')).toHaveText('Станция на связи');await expect(page.locator('#meteo-clock')).toHaveText('12:00:00');
+  const calls=await page.evaluate(()=>weatherTest.calls.filter(p=>p.startsWith('weather')).length);
+  await page.clock.runFor(3100);await expect(page.locator('#meteo-clock')).toHaveText('12:00:03');assert.equal(await page.evaluate(()=>weatherTest.calls.filter(p=>p.startsWith('weather')).length),calls);
+  const blink=await page.locator('.meteo-clock-separator').first().evaluate(e=>{const a=e.getAnimations()[0];a.pause();a.currentTime=0;const on=getComputedStyle(e).opacity;a.currentTime=750;return {on,off:getComputedStyle(e).opacity};});assert.equal(blink.on,'1');assert.equal(blink.off,'0');
+  assert.equal(await page.locator('#meteo-status').evaluate(e=>getComputedStyle(e,'::before').animationName),'meteo-online-blink');
+  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('.meteo-clock-separator').first().evaluate(e=>getComputedStyle(e).animationName),'none');assert.equal(await page.locator('#meteo-status').evaluate(e=>getComputedStyle(e,'::before').animationName),'none');
+  await page.emulateMedia({reducedMotion:'no-preference'});await page.evaluate(()=>weatherTest.stale=true);await page.locator('#meteo-refresh').tap();await expect(page.locator('#meteo-status')).toHaveText('Станция не на связи');assert.equal(await page.locator('#meteo-status').evaluate(e=>getComputedStyle(e,'::before').animationName),'none');
+  await page.locator('#meteo-back').tap();const closed=await page.locator('#meteo-clock').textContent();await page.clock.runFor(3000);assert.equal(await page.locator('#meteo-clock').textContent(),closed);assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });

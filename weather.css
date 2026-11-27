@@ -20,3 +20,18 @@
 html[data-skin=terminal] .meteo-screen button{text-transform:none}
 
 .meteo-screen{text-shadow:none}
+
+/* Тот же морской фон, что в переписке, с собственной дневной/ночной темой. */
+.meteo-screen{background:#f2f5ee;isolation:isolate}
+.meteo-screen::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:url('./assets/chat-nautical.png') center/cover no-repeat}
+.meteo-screen[data-theme=dark]{background:#131a17}
+.meteo-screen[data-theme=dark]::before{filter:invert(1) hue-rotate(180deg);opacity:.62}
+.meteo-wrap{position:relative;z-index:1}
+.meteo-clock-wrap time{display:inline-flex;align-items:baseline;font-size:clamp(36px,6vw,66px)}
+.meteo-clock-separator{animation:meteo-clock-blink 1s steps(1,end) infinite}
+.meteo-status[data-state=online]::before{width:8px;height:8px;background:#00d86f;box-shadow:0 0 8px #00d86f99;animation:meteo-online-blink 1s ease-in-out infinite}
+.meteo-screen[data-theme=dark] .meteo-status[data-state=online]::before{background:#32ff9c;box-shadow:0 0 10px #32ff9caa}
+@keyframes meteo-clock-blink{0%,49.99%{opacity:1}50%,100%{opacity:0}}
+@keyframes meteo-online-blink{0%,100%{opacity:1}50%{opacity:.25}}
+@media(max-width:600px){.meteo-clock-wrap time{font-size:clamp(26px,7vw,42px)}}
+@media(prefers-reduced-motion:reduce){.meteo-clock-separator,.meteo-status[data-state=online]::before{animation:none}}
