@@ -5,7 +5,7 @@ import {openRoom} from './messages.js';
 import {nearBottom} from './viewport.js';
 import {voicePlaying} from './media.js';
 
-export const APP_VERSION = '2.22.2';
+export const APP_VERSION = '2.22.3';
 const RELOAD_KEY = 'mayak.update.reload', CONTEXT_KEY = 'mayak.update.context';
 const CHECK_EVERY = 60000, QUIET_FOR = 3000;
 let registration = null, checking = false, started = false, reloading = false;

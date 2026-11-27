@@ -15,31 +15,57 @@ const mock=`(()=>{
   return {};
  },watch(){},stop(){}};
 })();`;
-async function fixture(clock=false){
- const release={worker:'2.14.0',client:'2.14.0',broken:false,swRequests:0};
+async function fixture(clock=false,options={}){
+ const release={worker:'2.14.0',client:'2.14.0',broken:false,swRequests:0,httpCache:!!options.httpCache,legacy:!!options.legacy};
  const mime={'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
  const server=http.createServer((req,res)=>{
   const relative=decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1)||'index.html',file=path.resolve(root,relative);
   if(!file.startsWith(root+path.sep)||!mime[path.extname(file)]||!fs.existsSync(file)){res.writeHead(404).end();return;}
   if(release.broken&&relative==='js/updates.js'){res.writeHead(503).end();return;}
   if(relative==='sw.js')release.swRequests++;
-  let body=relative==='cloud.js'?Buffer.from(mock):fs.readFileSync(file);
-  if(['.js','.html'].includes(path.extname(file)))body=Buffer.from(body.toString().replaceAll(sourceVersion,relative==='sw.js'?release.worker:release.client));
-  res.writeHead(200,{'Content-Type':mime[path.extname(file)],'Cache-Control':'no-store'});res.end(body);
+  let body=relative==='cloud.js'?Buffer.from(mock):fs.readFileSync(relative==='sw.js'&&release.legacy?path.join(root,'tests/fixtures/sw-2.22.2.js'):file);
+  if(['.js','.html'].includes(path.extname(file)))body=Buffer.from(body.toString().replaceAll(relative==='sw.js'&&release.legacy?'2.22.2':sourceVersion,relative==='sw.js'?release.worker:release.client));
+  res.writeHead(200,{'Content-Type':mime[path.extname(file)],'Cache-Control':release.httpCache&&relative!=='sw.js'?'public, max-age=3600':'no-store'});res.end(body);
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'allow'});
  await context.addInitScript(()=>localStorage.setItem('mayak.push.off','1'));
+ const consoleErrors=[];context.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  if(clock)await page.clock.install();
- await page.goto('http://127.0.0.1:'+server.address().port);await expect(page.locator('#chat')).toBeVisible();
- await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
+ await page.goto('http://127.0.0.1:'+server.address().port+(options.startPath||''));await expect(page.locator('#chat')).toBeVisible();
+ try{await page.waitForFunction(()=>!!navigator.serviceWorker.controller);}catch(error){
+  console.error('Initial worker diagnostics',JSON.stringify({consoleErrors,state:await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return {active:r?.active?.state,installing:r?.installing?.state,caches:await caches.keys()};})}));
+  await browser.close();await new Promise(r=>server.close(r));throw error;
+ }
  const version=()=>clientVersion(page);
  const update=async(worker,client=worker)=>{Object.assign(release,{worker,client});await page.evaluate(async()=>{await (await navigator.serviceWorker.getRegistration()).update();});};
  const unchanged=async id=>{await page.waitForTimeout(4200);assert.equal(await page.evaluate(()=>window.loadId),id);};
  return {release,browser,context,page,errors,version,update,unchanged,close:async()=>{await browser.close();await new Promise(resolve=>server.close(resolve));}};
 }
+test('automatic update bypasses previously cached HTTP shell without restart',{timeout:45000},async()=>{
+ const f=await fixture(false,{httpCache:true});try{
+  await f.unchanged(await f.page.evaluate(()=>window.loadId));
+  await f.page.locator('#message-input').fill('Черновик при обновлении через HTTP-кэш');await f.page.locator('#message-input').blur();
+  await f.update('2.14.1');await expect.poll(f.version,{timeout:20000}).toBe('2.14.1');
+  await expect(f.page.locator('#message-input')).toHaveValue('Черновик при обновлении через HTTP-кэш');await expect(f.page.locator('#update-banner')).toBeHidden();assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
+test('automatic update recovers an already stuck legacy client without closing the app',{timeout:60000},async()=>{
+ const f=await fixture(true,{httpCache:true,legacy:true});try{const {page,release}=f;
+  await f.unchanged(await page.evaluate(()=>window.loadId));await page.locator('#message-input').fill('Сохранить черновик застрявшего клиента');await page.locator('#message-input').blur();
+  await f.update('2.14.1');await expect(page.locator('#update-banner')).toContainText('при следующем открытии',{timeout:20000});assert.equal(await f.version(),'2.14.0');assert.equal(await page.evaluate(()=>sessionStorage.getItem('mayak.update.reload')),'2.14.1');
+  await page.screenshot({path:path.join(root,'test-results/update-legacy-stuck-before.png')});
+  Object.assign(release,{legacy:false,worker:'2.14.2',client:'2.14.2'});await page.clock.fastForward(61000);await expect.poll(f.version,{timeout:20000}).toBe('2.14.2');await expect(page.locator('#update-banner')).toBeHidden();await expect(page.locator('#message-input')).toHaveValue('Сохранить черновик застрявшего клиента');assert.equal(await page.evaluate(async()=>(await import('/js/core.js')).state.user.id),USER);
+  await page.screenshot({path:path.join(root,'test-results/update-legacy-recovered-after.png')});assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
+test('automatic update serves the installed shell for index.html and launch parameters',{timeout:45000},async()=>{
+ const f=await fixture(false,{httpCache:true,startPath:'/index.html?source=pwa'});try{
+  await f.unchanged(await f.page.evaluate(()=>window.loadId));await f.update('2.14.1');await expect.poll(f.version,{timeout:20000}).toBe('2.14.1');await expect(f.page.locator('.composer-footnote')).toContainText('2.14.1');await expect(f.page.locator('#update-banner')).toBeHidden();assert.ok(f.page.url().includes('/index.html?source=pwa'));assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
 test('automatic update waits while the inline expression panel is open',{timeout:45000},async()=>{
  const f=await fixture(),{page}=f;try{
   const initial=await page.evaluate(()=>window.loadId);await page.locator('#stickers-button').tap();await expect(page.locator('#expression-panel')).toBeVisible();
@@ -108,14 +134,13 @@ test('automatic update: minute timer, another hidden tab and unavailable draft s
  }finally{await f.close();}
 });
 
-test('automatic update: one reload per target if the host returns stale page code',{timeout:60000},async()=>{
+test('automatic update rejects mixed releases and retries the same target when host recovers',{timeout:60000},async()=>{
  const f=await fixture(),{page,version,update,unchanged}=f;
  try{
   const first=await page.evaluate(()=>window.loadId);await update('2.14.1','2.14.0');
-  await page.waitForFunction(first=>window.loadId&&window.loadId!==first,first,{timeout:20000});
-  const stale=await page.evaluate(()=>window.loadId);await expect(page.locator('#update-banner')).toContainText('при следующем открытии');await unchanged(stale);assert.equal(await version(),'2.14.0');
-  await page.evaluate(async()=>{await (await import('/js/updates.js')).checkForUpdates(true);});await unchanged(stale);
-  await update('2.14.2');await expect.poll(version,{timeout:20000}).toBe('2.14.2');assert.deepEqual(f.errors,[]);
+  await unchanged(first);assert.equal(await version(),'2.14.0');await expect(page.locator('#update-banner')).toBeHidden();
+  assert.equal(await page.evaluate(async()=>{const c=new MessageChannel();return new Promise(resolve=>{c.port1.onmessage=e=>resolve(e.data.version);navigator.serviceWorker.controller.postMessage({type:'MAYAK_VERSION'},[c.port2]);});}),'2.14.0');
+  await update('2.14.1');await expect.poll(version,{timeout:20000}).toBe('2.14.1');assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
 
