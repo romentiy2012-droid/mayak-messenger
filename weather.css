@@ -35,3 +35,8 @@ html[data-skin=terminal] .meteo-screen button{text-transform:none}
 @keyframes meteo-online-blink{0%,100%{opacity:1}50%{opacity:.25}}
 @media(max-width:600px){.meteo-clock-wrap time{font-size:clamp(26px,7vw,42px)}}
 @media(prefers-reduced-motion:reduce){.meteo-clock-separator,.meteo-status[data-state=online]::before{animation:none}}
+
+/* Бордовые подписи, с более светлым оттенком на ночном фоне. */
+.meteo-screen{--mw-burgundy:#800020}
+.meteo-screen[data-theme=dark]{--mw-burgundy:#d58096}
+.meteo-brand,.meteo-brand b,.meteo-eyebrow,.meteo-date,.meteo-clock-wrap>span:last-child{color:var(--mw-burgundy)}
