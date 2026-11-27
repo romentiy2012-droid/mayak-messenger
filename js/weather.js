@@ -8,21 +8,33 @@ const svg=(tag,attrs={})=>{const e=document.createElementNS(NS,tag);for(const [k
 const num=(v,digits=1)=>typeof v==='number'&&Number.isFinite(v)?new Intl.NumberFormat('ru-RU',{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(v):'—';
 const now=()=>Date.now()+skew;
 function icon(night,code){
- const s=svg('svg',{viewBox:'0 0 64 64','aria-hidden':'true'});
- if(code==null)return s;
+ const known=[0,1,2,3,45,48,51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(code);
+ const s=svg('svg',{viewBox:'-6 -6 76 76',role:'img','aria-label':known?weatherName(code):'Нет данных о погоде'});
+ if(!known){s.append(svg('circle',{cx:32,cy:30,r:19,class:'weather-unknown'}),svg('path',{d:'M23 30h18',class:'weather-unknown'}));return s;}
  if(code<=2){
   if(night){s.append(svg('path',{d:'M34 8a19 19 0 1 0 21 26A18 18 0 0 1 34 8',class:'weather-moon'}));}
-  else {s.append(svg('circle',{cx:29,cy:26,r:12,class:'weather-sun'}));for(let i=0;i<8;i++){let a=i*Math.PI/4;s.append(svg('line',{x1:29+17*Math.cos(a),y1:26+17*Math.sin(a),x2:29+21*Math.cos(a),y2:26+21*Math.sin(a),class:'weather-ray'}));}}
+  else {s.append(svg('circle',{cx:29,cy:26,r:12,class:'weather-sun'}));const rays=svg('g',{class:'weather-rays'});for(let i=0;i<8;i++){let a=i*Math.PI/4;rays.append(svg('line',{x1:29+17*Math.cos(a),y1:26+17*Math.sin(a),x2:29+21*Math.cos(a),y2:26+21*Math.sin(a),class:'weather-ray'}));}s.append(rays);}
  }
- if(code!==0)s.append(svg('path',{d:'M17 48a10 10 0 0 1-1-20 14 14 0 0 1 26-3 12 12 0 1 1 4 23Z',class:'weather-cloud'}));
+ if(code!==0){const d='M17 48a10 10 0 0 1-1-20 14 14 0 0 1 26-3 12 12 0 1 1 4 23Z';
+  const rear=svg('g',{class:'weather-cloud-rear'});rear.append(svg('path',{d,transform:'translate(-3 -7) scale(.92)',class:'weather-cloud'}));
+  const front=svg('g',{class:'weather-cloud-front'});front.append(svg('path',{d,class:'weather-cloud'}));s.append(rear,front);
+ }
  if(code>=95)s.append(svg('path',{d:'m35 42-9 12h8l-4 9 14-14h-9l5-7',class:'weather-lightning'}));
- else if((code>=71&&code<=77)||code===85||code===86){for(const x of [21,34,47])s.append(svg('path',{d:`M${x-3} 54l6 6m-6 0 6-6`,class:'weather-snow'}));}
- else if(code>=51&&code<=82){for(const x of [21,34,47])s.append(svg('path',{d:`m${x} 53-3 7`,class:'weather-rain'}));}
- if(code===45||code===48)s.append(svg('path',{d:'M13 54h37M18 60h27',class:'weather-fog'}));return s;
+ if((code>=71&&code<=77)||code===85||code===86){for(const [i,x]of [21,34,47].entries())s.append(svg('path',{d:`M${x-2} 51l4 4m-4 0 4-4`,class:'weather-snow',style:`animation-delay:${-i*.8}s`}));}
+ else if(code>=51){for(const [i,x]of [21,34,47].entries())s.append(svg('path',{d:`m${x} 48-3 6`,class:'weather-rain',style:`animation-delay:${-i*.3}s`}));}
+ if(code===45||code===48){s.append(svg('path',{d:'M10 51h38M17 61h31',class:'weather-fog'}),svg('path',{d:'M18 56h38',class:'weather-fog weather-fog-back'}));}return s;
+}
+function renderIcons(night,weather){
+ const code=weather?.code,key=String(code)+':'+night;
+ const title=weather?(now()/1000-weather.observed_at>7200?'Архив · ':'')+weatherName(code)+' · '+stationTime(weather.observed_at*1000).clock:'Нет данных о погоде';
+ for(const id of ['meteo-top-icon','meteo-icon']){const holder=$(id);holder.title=title;
+  // Не перезапускаем анимацию при каждом опросе и пересчёте давности.
+  if(holder.dataset.weatherKey!==key){holder.dataset.weatherKey=key;holder.replaceChildren(icon(night,code));}
+ }
 }
 function make(){
  root=node('section','meteo-screen');root.id='meteo-screen';root.hidden=true;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-labelledby','meteo-title');
- root.innerHTML=`<div class="meteo-wrap"><header class="meteo-topbar"><button type="button" id="meteo-back" class="meteo-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg>Назад в чат</button><span class="meteo-brand">МАЯК <b>/</b> МЕТЕО</span><button type="button" id="meteo-refresh" class="meteo-refresh" aria-label="Обновить показания"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M19.5 12a7.5 7.5 0 1 0-2 5M20 12l-2-5"/></svg>Обновить</button></header>
+ root.innerHTML=`<div class="meteo-wrap"><header class="meteo-topbar"><button type="button" id="meteo-back" class="meteo-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg>Назад в чат</button><span class="meteo-brand">МАЯК <b>/</b> МЕТЕО</span><div id="meteo-top-icon" class="meteo-weather-icon meteo-header-weather"></div></header>
  <main class="meteo-main"><header class="meteo-heading"><div><p class="meteo-eyebrow">ВАША МЕТЕОСТАНЦИЯ</p><h1 id="meteo-title"><svg class="meteo-location-pin" viewBox="0 0 24 30" aria-hidden="true"><path d="M12 0A12 12 0 0 0 0 12c0 8 12 18 12 18s12-10 12-18A12 12 0 0 0 12 0Zm0 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg>Астрахань</h1><p class="meteo-location">5-я Литейная</p><p id="meteo-date" class="meteo-date"></p></div><div class="meteo-clock-wrap"><span id="meteo-dayphase"></span><time id="meteo-clock"><span id="meteo-hours">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-minutes">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-seconds">--</span></time><span>Время Астрахани</span></div></header>
  <p id="meteo-alert" class="meteo-alert" role="status" hidden></p>
  <section class="meteo-card meteo-sensor" aria-label="Показания уличного датчика"><div class="meteo-card-top"><h2>Улица / датчик</h2><span id="meteo-status" class="meteo-status">Подключаемся…</span></div>
@@ -35,7 +47,7 @@ function make(){
  <footer class="meteo-footnote"><span>Измерения поступают раз в минуту. История на сервере — 30 дней.</span><span id="meteo-sync" aria-live="polite"></span></footer></main></div>`;
  document.body.append(root);
  for(let i=0;i<WEATHER_WINDOWS.length;i++){let b=node('button','',WEATHER_LABELS[i]);b.type='button';b.dataset.minutes=String(WEATHER_WINDOWS[i]);b.setAttribute('aria-pressed',String(selected===WEATHER_WINDOWS[i]));b.addEventListener('click',()=>{selected=WEATHER_WINDOWS[i];for(const button of $('meteo-windows').children)button.setAttribute('aria-pressed',String(Number(button.dataset.minutes)===selected));render();load();});$('meteo-windows').append(b);}
- $('meteo-back').addEventListener('click',()=>closeWeather());$('meteo-refresh').addEventListener('click',()=>load());
+ $('meteo-back').addEventListener('click',()=>closeWeather());
  root.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeWeather();}if(event.key==='Tab'){const all=[...root.querySelectorAll('button:not(:disabled),a[href]')].filter(e=>e.getClientRects().length),first=all[0],last=all.at(-1);if(event.shiftKey&&document.activeElement===first){last.focus();event.preventDefault();}else if(!event.shiftKey&&document.activeElement===last){first.focus();event.preventDefault();}}});
 }
 function drawChart(points){
@@ -88,18 +100,18 @@ function render(){
   $('meteo-weather-name').textContent=weatherName(w.code);$('meteo-city-values').textContent=(w.temperature>0?'+':'')+num(w.temperature)+' °C / '+num(w.humidity,0)+'%';
   $('meteo-city-extra').textContent='Ощущается '+num(w.feels_like,0)+' °C · ветер '+num(w.wind)+' м/с';
  }else{$('meteo-weather-age').textContent='Нет данных';$('meteo-weather-name').textContent='Ждём интернет-погоду';$('meteo-city-values').textContent='—';$('meteo-city-extra').textContent='Появится после первого пакета станции.';}
- $('meteo-icon').replaceChildren(icon(root.dataset.theme==='dark',w?.code));
+ renderIcons(root.dataset.theme==='dark',w);
 }
 async function load(){
  if(!active||document.hidden||!state.user)return;const current=++epoch,id=state.user.id,minutes=selected;
- $('meteo-refresh').disabled=true;
+ root.setAttribute('aria-busy','true');
  try {
   const data=await api('weather?minutes='+minutes);
   if(!active||current!==epoch||state.user?.id!==id||selected!==minutes)return;
   if(!data?.station||!Array.isArray(data.history)||!Number.isFinite(Date.parse(data.server_time)))throw Error('Неверный ответ сервера');
   snapshot=data;skew=Date.parse(data.server_time)-Date.now();networkError='';
  }catch(error){if(current!==epoch||!active)return;networkError=error.status===401||error.status===403?'Нет доступа к метеостанции. Войдите в Маяк.':'Не удалось обновить данные. Повторим после восстановления связи.';}
- finally {if(current===epoch&&active){$('meteo-refresh').disabled=false;render();scheduleClock();}}
+ finally {if(current===epoch&&active){root.setAttribute('aria-busy','false');render();scheduleClock();}}
 }
 export function openWeather(push=true){
  if(!state.user||active)return;if(!root)make();
@@ -108,12 +120,12 @@ export function openWeather(push=true){
  previousFocus=document.activeElement;previousScroll=$('messages-scroll').scrollTop;
  document.dispatchEvent(new Event('mayak-expression-close'));
  if(document.activeElement?.matches('textarea,input'))document.activeElement.blur();
- active=true;root.hidden=false;$('chat').inert=true;document.body.dataset.meteoOpen='true';
+ active=true;root.hidden=false;$('chat').inert=true;document.body.dataset.meteoOpen='true';document.body.dataset.meteoPaused=String(document.hidden);
  if(push)history.pushState({...history.state,mayakWeather:true},'',location.pathname+location.search+'#weather');
  networkError='';render();$('meteo-back').focus({preventScroll:true});load();timer=setInterval(load,30000);scheduleClock();renderTimer=setInterval(()=>{if(!document.hidden)render();},10000);
 }
 export function closeWeather(back=true){
- if(!active)return;active=false;++epoch;clearInterval(timer);clearTimeout(clockTimer);clearInterval(renderTimer);root.hidden=true;$('chat').inert=false;delete document.body.dataset.meteoOpen;
+ if(!active)return;active=false;++epoch;clearInterval(timer);clearTimeout(clockTimer);clearInterval(renderTimer);root.hidden=true;$('chat').inert=false;delete document.body.dataset.meteoOpen;delete document.body.dataset.meteoPaused;
  $('messages-scroll').scrollTop=previousScroll;if(state.user&&previousFocus?.isConnected)previousFocus.focus({preventScroll:true});
  if(back&&history.state?.mayakWeather)history.back();
 }
@@ -121,6 +133,6 @@ export function initWeather(){
  $('weather-button').addEventListener('click',()=>openWeather());
  window.addEventListener('popstate',()=>{if(location.hash==='#weather'&&state.user)openWeather(false);else closeWeather(false);});
  window.addEventListener('online',()=>{if(active)load();});
- document.addEventListener('visibilitychange',()=>{if(active&&!document.hidden){render();load();}});
+ document.addEventListener('visibilitychange',()=>{if(active){document.body.dataset.meteoPaused=String(document.hidden);if(!document.hidden){render();load();}}});
  document.addEventListener('mayak-context-changed',()=>{if(!state.user||owner&&owner!==state.user.id){closeWeather(false);snapshot=null;owner=null;if(location.hash==='#weather')history.replaceState(null,'',location.pathname+location.search);}});
 }
