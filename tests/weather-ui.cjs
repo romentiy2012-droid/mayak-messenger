@@ -8,7 +8,7 @@ window.MayakCloud={async api(path,options={}){const t=window.weatherTest;t.calls
  if(path.startsWith('events'))return {people:[{...user,last_seen:now}],messages:Array.from({length:20},(_,i)=>({id:i+1,rev:i+1,user_id:uid,name:user.name,text:'Тестовая строка '+i,kind:'text',created:now,reactions:{},peer_a:null,peer_b:null})),reads:[],direct_full:true};
  if(path==='read'){t.read++;return {};}
  if(path.startsWith('weather')){if(t.offline)throw Error('Network unavailable');let a=t.time;
-  const history=Array.from({length:180},(_,i)=>({time:new Date(a-(180-i)*60000).toISOString(),temperature:28+Math.sin(i/20),humidity:35+Math.cos(i/30)}));
+  const history=Array.from({length:180},(_,i)=>({time:new Date(a-(180-i)*60000).toISOString(),temperature:28+Math.sin(i/20),humidity:35+Math.cos(i/30)})).filter((_,i)=>!t.gap||i<150||i>165);
   return {server_time:new Date(a).toISOString(),station:{id:'astrakhan-lit',city:'Астрахань',location:'5-я Литейная'},latest:t.empty?null:{received_at:new Date(a-(t.stale?900000:0)).toISOString(),measured_at:new Date(a-(t.stale?900000:0)).toISOString(),sensor_valid:!t.invalid,temperature:t.long?-40:28.1,humidity:t.long?100:35,firmware:'1.5.0',weather:{temperature:1.8,humidity:62,feels_like:-3,wind:4,code:2,observed_at:a/1000-300,sunrise:[Date.parse('2026-11-27T04:00:00Z')/1000,Date.parse('2026-11-28T04:01:00Z')/1000],sunset:[Date.parse('2026-11-27T13:00:00Z')/1000,Date.parse('2026-11-28T12:59:00Z')/1000]}},history:t.empty?[]:history};
  }return {};
 },watch(){},stop(){}};
@@ -25,13 +25,14 @@ test('weather UI: header thermometer, daytime/night, all windows, draft/read iso
  const f=await fixture();try{const {page}=f;await page.locator('#message-input').fill('Сохранить мой черновик');await page.waitForTimeout(700);
  const before=await page.locator('#messages-scroll').evaluate(e=>e.scrollTop),read=await page.evaluate(()=>weatherTest.read);
  assert.equal(await page.locator('#weather-button').evaluate(e=>e.nextElementSibling.id),'invite-button');
- await page.getByRole('button',{name:'Метеостанция',exact:true}).tap();await expect(page.locator('#meteo-status')).toHaveText('Станция на связи');await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','light');await expect(page.locator('#meteo-clock')).toHaveText(/^12:00:\d{2}$/);assert.equal(await page.locator('.meteo-card').first().evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 255, 255)');await expect(page.locator('#meteo-temp')).toHaveText('+28,1');
+ await page.getByRole('button',{name:'Метеостанция',exact:true}).tap();await expect(page.locator('#meteo-status')).toHaveText('Станция на связи');await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','light');await expect(page.locator('#meteo-clock')).toHaveText(/^12:00:\d{2}$/);assert.equal(await page.locator('#meteo-dayphase').textContent(),'День');assert.equal(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(9, 15, 24)');assert.equal(await page.locator('.meteo-temperature').evaluate(e=>getComputedStyle(e).color),'rgb(67, 230, 230)');assert.equal(await page.locator('.meteo-humidity').evaluate(e=>getComputedStyle(e).color),'rgb(255, 226, 120)');await expect(page.locator('#meteo-temp')).toHaveText('+28,1');
  await expect(page.locator('#meteo-windows button[aria-pressed=true]')).toHaveText('1 ч');assert.ok(await page.evaluate(()=>weatherTest.calls.includes('weather?minutes=60')));
- await expect(page.locator('.meteo-eyebrow')).toHaveText('ВАША МЕТЕОСТАНЦИЯ');assert.match(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e,'::before').backgroundImage),/chat-nautical\.png/);
+ await expect(page.locator('.meteo-eyebrow')).toHaveText('ВАША МЕТЕОСТАНЦИЯ');assert.ok(await page.locator('#meteo-chart .meteo-chart-fill').count()>=2);await expect(page.locator('.meteo-brand')).toBeVisible();
  assert.equal(await page.locator('#chat').evaluate(e=>e.inert),true);await page.evaluate(async()=>{(await import('/js/messages.js')).markRead();});await page.waitForTimeout(500);assert.equal(await page.evaluate(()=>weatherTest.read),read);
+ await page.locator('#meteo-screen').evaluate(e=>e.scrollTop=0);await page.screenshot({path:path.join(root,'test-results/meteo-2.22.5-phone.png')});
  for(const [i,s]of ['30 мин','1 ч','3 ч','6 ч','12 ч','24 ч'].entries()){await page.locator('#meteo-windows').getByRole('button',{name:s,exact:true}).tap();await expect(page.locator('#meteo-windows button').nth(i)).toHaveAttribute('aria-pressed','true');await expect(page.locator('#meteo-refresh')).toBeEnabled();}
- await page.screenshot({path:path.join(root,'test-results/weather-phone-day.png')});
- await page.evaluate(()=>weatherTest.time=Date.parse('2026-11-27T18:00:00Z'));await page.locator('#meteo-refresh').tap();await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','dark');await expect(page.locator('#meteo-clock')).toHaveText(/^22:00:\d{2}$/);assert.match(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e,'::before').filter),/invert\(1\)/);await page.waitForTimeout(400);await page.screenshot({path:path.join(root,'test-results/weather-phone-night.png')});
+ await page.locator('#meteo-screen').evaluate(e=>e.scrollTop=0);await page.screenshot({path:path.join(root,'test-results/weather-phone-day.png')});
+ await page.evaluate(()=>weatherTest.time=Date.parse('2026-11-27T18:00:00Z'));await page.locator('#meteo-refresh').tap();await expect(page.locator('#meteo-screen')).toHaveAttribute('data-theme','dark');await expect(page.locator('#meteo-clock')).toHaveText(/^22:00:\d{2}$/);assert.equal(await page.locator('#meteo-dayphase').textContent(),'Ночь');assert.equal(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(9, 15, 24)');await page.waitForTimeout(400);await page.locator('#meteo-screen').evaluate(e=>e.scrollTop=0);await page.screenshot({path:path.join(root,'test-results/weather-phone-night.png')});
  await page.locator('#meteo-back').tap();await expect(page.locator('#meteo-screen')).toBeHidden();await expect(page.locator('#message-input')).toHaveValue('Сохранить мой черновик');assert.equal(await page.locator('#messages-scroll').evaluate(e=>e.scrollTop),before);
  await page.locator('#weather-button').tap();await expect(page.locator('#meteo-windows button[aria-pressed=true]')).toHaveText('1 ч');await page.goBack();await expect(page.locator('#meteo-screen')).toBeHidden();
  assert.deepEqual(f.errors,[]);
@@ -39,13 +40,18 @@ test('weather UI: header thermometer, daytime/night, all windows, draft/read iso
 });
 test('weather UI: small and desktop screens, honest empty/offline/sensor failure, account exit',async()=>{
  const f=await fixture();try{const {page}=f;await page.locator('#weather-button').tap();await expect(page.locator('#meteo-status')).toHaveText('Станция на связи');
+ await page.evaluate(()=>weatherTest.gap=true);await page.locator('#meteo-refresh').tap();await expect(page.locator('.meteo-chart-fill')).toHaveCount(4);
+ assert.ok((await page.locator('path.meteo-t-line').getAttribute('d')).split('M').length===3);
+ assert.ok(await page.locator('.meteo-chart-fill').evaluateAll(es=>es.every(e=>(e.getAttribute('d').match(/M/g)||[]).length===1)));
+ await page.evaluate(()=>weatherTest.gap=false);
  for(const size of [{width:320,height:568},{width:390,height:844},{width:1024,height:950}]){
   await page.setViewportSize(size);await page.evaluate(()=>weatherTest.long=true);await page.locator('#meteo-refresh').tap();await expect(page.locator('#meteo-rh')).toHaveText('100,0');
   assert.ok(await page.locator('.chat-header').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
   assert.ok(await page.locator('#meteo-screen').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
   assert.ok(await page.locator('#meteo-temp').evaluate(e=>e.getBoundingClientRect().right<document.querySelector('#meteo-rh').getBoundingClientRect().left));
   assert.ok(await page.locator('#meteo-clock').evaluate(e=>e.getBoundingClientRect().left>=document.querySelector('.meteo-heading>div').getBoundingClientRect().right));
-  await page.screenshot({path:path.join(root,'test-results/weather-'+size.width+'.png')});
+  await page.locator('#meteo-screen').evaluate(e=>e.scrollTop=0);await page.screenshot({path:path.join(root,'test-results/weather-'+size.width+'.png')});
+  await page.evaluate(()=>document.documentElement.dataset.skin='terminal');assert.equal(await page.locator('.meteo-temperature').evaluate(e=>getComputedStyle(e).color),'rgb(67, 230, 230)');assert.equal(await page.locator('#meteo-screen').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(9, 15, 24)');await page.evaluate(()=>document.documentElement.dataset.skin='classic');
  }
  await page.evaluate(()=>{weatherTest.stale=true;weatherTest.long=false;});await page.locator('#meteo-refresh').click();await expect(page.locator('#meteo-status')).toHaveText('Станция не на связи');await expect(page.locator('#meteo-alert')).toContainText('последние полученные');
  await page.evaluate(()=>{weatherTest.stale=false;weatherTest.invalid=true;});await page.locator('#meteo-refresh').click();await expect(page.locator('#meteo-temp')).toHaveText('—');await expect(page.locator('#meteo-status')).toHaveText('Ошибка датчика');

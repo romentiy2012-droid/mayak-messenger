@@ -72,6 +72,13 @@ test('automatic update waits while the inline expression panel is open',{timeout
   await f.update('2.14.9');await expect(page.locator('#update-banner')).toBeVisible();await f.unchanged(initial);await page.locator('#stickers-button').tap();await expect.poll(f.version,{timeout:20000}).toBe('2.14.9');assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
+test('automatic update waits for the weather monitor and resumes after returning to chat',{timeout:45000},async()=>{
+ const f=await fixture(),{page}=f;try{
+  await page.locator('#message-input').fill('Черновик под метеостанцией');await page.locator('#weather-button').tap();await expect(page.locator('#meteo-screen')).toBeVisible();
+  const initial=await page.evaluate(()=>window.loadId);await f.update('2.14.9');await f.unchanged(initial);await expect(page.locator('#meteo-screen')).toBeVisible();
+  await page.locator('#meteo-back').tap();await expect.poll(f.version,{timeout:20000}).toBe('2.14.9');await expect(page.locator('#update-banner')).toBeHidden();await expect(page.locator('#message-input')).toHaveValue('Черновик под метеостанцией');assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
+});
 test('automatic update waits for the photo viewer and resumes after closing it',{timeout:45000},async()=>{
  const f=await fixture(),{page}=f;try{
   await page.evaluate(async()=>{const {state}=await import('/js/core.js'),media=await import('/js/media.js'),blob=await (await fetch('/icon-512.png')).blob();media.rememberMedia('synthetic/update-photo.png',blob);state.messages.push({id:999,file:'synthetic/update-photo.png',kind:'photo'});media.openViewer(999);});

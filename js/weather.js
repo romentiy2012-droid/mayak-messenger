@@ -22,11 +22,11 @@ function icon(night,code){
 }
 function make(){
  root=node('section','meteo-screen');root.id='meteo-screen';root.hidden=true;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-labelledby','meteo-title');
- root.innerHTML=`<div class="meteo-wrap"><header class="meteo-topbar"><button type="button" id="meteo-back" class="meteo-back">Назад в чат</button><span class="meteo-brand">МАЯК <b>/</b> МЕТЕО</span><button type="button" id="meteo-refresh" class="meteo-refresh" aria-label="Обновить показания">Обновить</button></header>
- <main class="meteo-main"><header class="meteo-heading"><div><p class="meteo-eyebrow">ВАША МЕТЕОСТАНЦИЯ</p><h1 id="meteo-title">Астрахань</h1><p class="meteo-location">5-я Литейная</p><p id="meteo-date" class="meteo-date"></p></div><div class="meteo-clock-wrap"><span id="meteo-dayphase"></span><time id="meteo-clock"><span id="meteo-hours">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-minutes">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-seconds">--</span></time><span>Время Астрахани</span></div></header>
+ root.innerHTML=`<div class="meteo-wrap"><header class="meteo-topbar"><button type="button" id="meteo-back" class="meteo-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg>Назад в чат</button><span class="meteo-brand">МАЯК <b>/</b> МЕТЕО</span><button type="button" id="meteo-refresh" class="meteo-refresh" aria-label="Обновить показания"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M19.5 12a7.5 7.5 0 1 0-2 5M20 12l-2-5"/></svg>Обновить</button></header>
+ <main class="meteo-main"><header class="meteo-heading"><div><p class="meteo-eyebrow">ВАША МЕТЕОСТАНЦИЯ</p><h1 id="meteo-title"><svg class="meteo-location-pin" viewBox="0 0 24 30" aria-hidden="true"><path d="M12 0A12 12 0 0 0 0 12c0 8 12 18 12 18s12-10 12-18A12 12 0 0 0 12 0Zm0 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg>Астрахань</h1><p class="meteo-location">5-я Литейная</p><p id="meteo-date" class="meteo-date"></p></div><div class="meteo-clock-wrap"><span id="meteo-dayphase"></span><time id="meteo-clock"><span id="meteo-hours">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-minutes">--</span><span class="meteo-clock-separator" aria-hidden="true">:</span><span id="meteo-seconds">--</span></time><span>Время Астрахани</span></div></header>
  <p id="meteo-alert" class="meteo-alert" role="status" hidden></p>
  <section class="meteo-card meteo-sensor" aria-label="Показания уличного датчика"><div class="meteo-card-top"><h2>Улица / датчик</h2><span id="meteo-status" class="meteo-status">Подключаемся…</span></div>
- <div class="meteo-measures"><div class="meteo-measure"><div class="meteo-number meteo-temperature"><span id="meteo-temp">—</span><small>°C</small></div><p>Температура</p></div><div class="meteo-measure"><div class="meteo-number meteo-humidity"><span id="meteo-rh">—</span><small>%</small></div><p>Влажность</p></div></div>
+ <div class="meteo-measures"><div class="meteo-measure"><div class="meteo-number meteo-temperature"><span id="meteo-temp">—</span><small>°C</small></div><p><svg viewBox="0 0 16 24" aria-hidden="true"><path d="M5 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0ZM8 8v10"/></svg>Температура</p></div><div class="meteo-measure"><div class="meteo-number meteo-humidity"><span id="meteo-rh">—</span><small>%</small></div><p><svg viewBox="0 0 20 24" aria-hidden="true"><path d="M10 2S3 10 3 15a7 7 0 0 0 14 0C17 10 10 2 10 2ZM6 15a4 4 0 0 0 4 4"/></svg>Влажность</p></div></div>
  <div class="meteo-sample-line"><span id="meteo-sampled">Ждём первое измерение</span><span id="meteo-device"></span></div>
  <div class="meteo-chart-heading"><h3>История датчика</h3><div class="meteo-legend"><span>Температура, °C</span><span>Влажность, %</span></div></div>
  <div id="meteo-windows" class="meteo-windows" role="group" aria-label="Период графика"></div><div id="meteo-chart" class="meteo-chart"></div>
@@ -43,6 +43,9 @@ function drawChart(points){
  if(!points.length){const p=node('p','meteo-chart-empty',snapshot?.latest?'За выбранный период нет измерений':'История появится после подключения ESP32');area.append(p);return;}
  const chart=svg('svg',{viewBox:'0 0 640 190',role:'img','aria-label':'История температуры и влажности за '+WEATHER_LABELS[WEATHER_WINDOWS.indexOf(selected)]});
  const tScale=chartScale(points,'temperature'),hScale=chartScale(points,'humidity');
+ const defs=svg('defs');
+ for(const [id,color] of [['meteo-temp-fill','#43e6e6'],['meteo-rh-fill','#ffe278']]){const g=svg('linearGradient',{id,x1:0,y1:0,x2:0,y2:1});g.append(svg('stop',{offset:'0%','stop-color':color,'stop-opacity':.25}),svg('stop',{offset:'100%','stop-color':color,'stop-opacity':0}));defs.append(g);}
+ chart.append(defs);
  for(let i=0;i<5;i++){let x=48+i*136;chart.append(svg('line',{x1:x,y1:31,x2:x,y2:151,class:'meteo-grid'}));}
  for(let i=0;i<3;i++){let y=31+i*60;chart.append(svg('line',{x1:48,y1:y,x2:592,y2:y,class:'meteo-grid'}));
   let t=svg('text',{x:39,y:y+4,'text-anchor':'end',class:'meteo-axis meteo-t-axis'});t.textContent=num(tScale.high-i*(tScale.high-tScale.low)/2,1);chart.append(t);
@@ -50,7 +53,10 @@ function drawChart(points){
  }
  for(let i=0;i<5;i++){let m=selected*(4-i)/4,label=i===4?'сейчас':m<60?'−'+num(m,0)+'м':'−'+num(m/60,m%60?1:0)+'ч';let text=svg('text',{x:48+i*136,y:178,'text-anchor':'middle',class:'meteo-axis'});text.textContent=label;chart.append(text);}
  for(const [key,scale,cls] of [['temperature',tScale,'meteo-t-line'],['humidity',hScale,'meteo-h-line']]){
-  chart.append(svg('path',{d:chartPath(points,key,now(),selected,scale),class:cls}));
+  const path=chartPath(points,key,now(),selected,scale);
+  // Замыкаем заливку каждого непрерывного участка отдельно: паузы связи остаются пустыми.
+  for(const segment of path.match(/M[^M]+/g)||[]){const pairs=segment.slice(1).split('L');if(pairs.length<2)continue;const first=pairs[0].split(' ')[0],last=pairs.at(-1).split(' ')[0];chart.append(svg('path',{d:segment+`L${last} 151L${first} 151Z`,fill:`url(#${key==='temperature'?'meteo-temp-fill':'meteo-rh-fill'})`,class:'meteo-chart-fill'}));}
+  chart.append(svg('path',{d:path,class:cls}));
   // Отдельная точка остаётся видимой, даже когда непрерывной линии ещё нет.
   let last=0;for(const p of points){let time=Date.parse(p.time);if(!last||time-last>90000){let x=Math.max(48,Math.min(592,48+(time-(now()-selected*60000))/(selected*60000)*544)),y=151-(p[key]-scale.low)/(scale.high-scale.low)*120;chart.append(svg('circle',{cx:x,cy:y,r:2.4,class:cls+' meteo-point'}));}last=time;}
  }
